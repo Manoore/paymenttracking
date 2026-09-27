@@ -213,3 +213,51 @@ describe("recurring payments", () => {
     await request(app).post("/internal/jobs/reminders").set("x-cron-secret", "cron-secret").expect(200);
   });
 });
+
+describe("profile", () => {
+  it("updates profile and workspace settings, validates input", async () => {
+    const { accessToken } = await register();
+    const auth = { Authorization: `Bearer ${accessToken}` };
+    const res = await request(app)
+      .patch("/api/v1/auth/me")
+      .set(auth)
+      .send({
+        name: "Manoore",
+        phone: "+1 (408) 555-0100",
+        timezone: "America/New_York",
+        preferences: { emailReminders: false, reminderEmail: "Home@Example.com" },
+        workspace: { name: "Household", defaultCurrency: "inr" },
+      })
+      .expect(200);
+    expect(res.body.user).toMatchObject({
+      name: "Manoore",
+      phone: "+1 (408) 555-0100",
+      timezone: "America/New_York",
+      preferences: { emailReminders: false, reminderEmail: "home@example.com" },
+    });
+    expect(res.body.user.workspaces[0]).toMatchObject({ name: "Household", defaultCurrency: "INR" });
+
+    await request(app).patch("/api/v1/auth/me").set(auth).send({ timezone: "Mars/Olympus" }).expect(400);
+    const cleared = await request(app).patch("/api/v1/auth/me").set(auth).send({ phone: null }).expect(200);
+    expect(cleared.body.user.phone).toBeNull();
+  });
+
+  it("changes password and signs out other sessions", async () => {
+    const s = await register();
+    const auth = { Authorization: `Bearer ${s.accessToken}` };
+    await request(app)
+      .post("/api/v1/auth/change-password")
+      .set(auth)
+      .send({ currentPassword: "nope-nope-nope", newPassword: "another-long-password" })
+      .expect(400);
+    const changed = await request(app)
+      .post("/api/v1/auth/change-password")
+      .set(auth)
+      .send({ currentPassword: "correct-horse-battery", newPassword: "another-long-password" })
+      .expect(200);
+    expect(changed.body.refreshToken).toBeTruthy();
+    // Old session's refresh token no longer works; the new one does.
+    await request(app).post("/api/v1/auth/refresh").send({ refreshToken: s.refreshToken }).expect(401);
+    await request(app).post("/api/v1/auth/login").send({ email: "me@example.com", password: "another-long-password" }).expect(200);
+  });
+});

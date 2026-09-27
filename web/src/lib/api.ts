@@ -116,6 +116,22 @@ export const api = {
   },
 };
 
+/** Change password; the session route swaps in the new refresh-token cookie. */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const token = await getToken();
+  const res = await fetch("/api/session/change-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const details = data?.error?.details as { message: string }[] | undefined;
+    throw new ApiError(res.status, details?.[0]?.message ?? data?.error?.message ?? "Could not change password");
+  }
+  setAccessToken(data.accessToken);
+}
+
 export async function logout() {
   setAccessToken(null);
   await fetch("/api/session/logout", { method: "POST" }).catch(() => null);

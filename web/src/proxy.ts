@@ -1,20 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/welcome"];
 
-/** Redirect signed-out visitors to /login. Real authorization is enforced by the API. */
+/**
+ * Signed-out visitors see the landing page at "/" and are sent to /login for
+ * any app page. Signed-in users get the dashboard at "/". Real authorization
+ * is enforced by the API; this only routes.
+ */
 export function proxy(req: NextRequest) {
   const signedIn = req.cookies.has("ch_rt");
-  const isPublic = PUBLIC_PATHS.some((p) => req.nextUrl.pathname.startsWith(p));
+  const { pathname, search } = req.nextUrl;
+
+  if (!signedIn && pathname === "/") return NextResponse.rewrite(new URL("/welcome", req.url));
+
+  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   if (!signedIn && !isPublic) {
     const url = new URL("/login", req.url);
-    if (req.nextUrl.pathname !== "/") url.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+    url.searchParams.set("next", pathname + search);
     return NextResponse.redirect(url);
   }
-  if (signedIn && req.nextUrl.pathname === "/login") return NextResponse.redirect(new URL("/", req.url));
+  if (signedIn && pathname === "/login") return NextResponse.redirect(new URL("/", req.url));
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|.*\.(?:png|svg|jpg|ico)$).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|icon|apple-icon|.*\\.(?:png|svg|jpg|ico)$).*)"],
 };

@@ -119,6 +119,13 @@ class Api extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Changing the password revokes every session; store the fresh one for this device.
+  Future<void> changePassword(String current, String next) async {
+    final data = await post('/auth/change-password', {'currentPassword': current, 'newPassword': next});
+    _accessToken = data['accessToken'] as String;
+    await _storage.write(key: _refreshKey, value: data['refreshToken'] as String);
+  }
+
   Future<void> logout() async {
     final token = await _storage.read(key: _refreshKey);
     if (token != null) {

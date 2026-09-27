@@ -1,0 +1,239 @@
+"use client";
+
+import { useState } from "react";
+import { CheckCircle2, Loader2, LogOut } from "lucide-react";
+import { ErrorNote, Field, PageHeader, Section, Spinner } from "@/components/ui";
+import { api, ApiError, changePassword, logout } from "@/lib/api";
+import { formatDate } from "@/lib/format";
+import { useApi } from "@/lib/hooks";
+import type { User } from "@/lib/types";
+
+const CURRENCIES = ["USD", "INR", "EUR", "GBP", "CAD", "AUD", "SGD", "AED", "JPY"];
+
+function timezones(): string[] {
+  try {
+    return (Intl as unknown as { supportedValuesOf(k: string): string[] }).supportedValuesOf("timeZone");
+  } catch {
+    return ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "Asia/Kolkata", "Europe/London", "UTC"];
+  }
+}
+
+function Saved({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-sm text-ok">
+      <CheckCircle2 size={16} /> Saved
+    </span>
+  );
+}
+
+function ProfileForm({ user, onSaved }: { user: User; onSaved: (u: User) => void }) {
+  const ws = user.workspaces.find((w) => w.id === user.defaultWorkspaceId) ?? user.workspaces[0];
+  const [f, setF] = useState({
+    name: user.name,
+    phone: user.phone ?? "",
+    timezone: user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    emailReminders: user.preferences.emailReminders,
+    reminderEmail: user.preferences.reminderEmail ?? "",
+    workspaceName: ws?.name ?? "",
+    defaultCurrency: ws?.defaultCurrency ?? "USD",
+  });
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isOwner = ws?.role === "owner";
+
+  const bind = (k: "name" | "phone" | "timezone" | "reminderEmail" | "workspaceName" | "defaultCurrency") => ({
+    value: f[k],
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      setSaved(false);
+      setF((p) => ({ ...p, [k]: e.target.value }));
+    },
+  });
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const { user: updated } = await api.patch<{ user: User }>("/auth/me", {
+        name: f.name,
+        phone: f.phone.trim() || null,
+        timezone: f.timezone,
+        preferences: { emailReminders: f.emailReminders, reminderEmail: f.reminderEmail.trim() || null },
+        ...(isOwner ? { workspace: { name: f.workspaceName, defaultCurrency: f.defaultCurrency } } : {}),
+      });
+      onSaved(updated);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? ((err.details as { message: string }[] | undefined)?.[0]?.message ?? err.message) : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void submit(e)}>
+      <Section title="Your info">
+        <div className="card grid gap-4 p-4 sm:grid-cols-2">
+          <Field label="Name">
+            <input className="input" autoComplete="name" required {...bind("name")} />
+          </Field>
+          <Field label="Email" hint="Your sign-in email.">
+            <input className="input opacity-70" value={user.email} readOnly />
+          </Field>
+          <Field label="Phone" hint="Optional.">
+            <input className="input" type="tel" autoComplete="tel" placeholder="+1 408 555 0100" {...bind("phone")} />
+          </Field>
+          <Field label="Time zone" hint="Your local time zone.">
+            <select className="input" {...bind("timezone")}>
+              {timezones().map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </Section>
+
+      <Section title="Reminders">
+        <div className="card space-y-4 p-4">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-5 w-5"
+              checked={f.emailReminders}
+              onChange={(e) => {
+                setSaved(false);
+                setF((p) => ({ ...p, emailReminders: e.target.checked }));
+              }}
+            />
+            <span>
+              <span className="block font-medium">Email me when bills are due or overdue</span>
+              <span className="text-sm text-muted">In-app reminders always appear on your dashboard.</span>
+            </span>
+          </label>
+          {f.emailReminders && (
+            <Field label="Send reminders to" hint={`Leave blank to use ${user.email}`}>
+              <input className="input" type="email" placeholder={user.email} {...bind("reminderEmail")} />
+            </Field>
+          )}
+        </div>
+      </Section>
+
+      {ws && (
+        <Section title="Workspace">
+          <div className="card grid gap-4 p-4 sm:grid-cols-2">
+            <Field label="Workspace name">
+              <input className="input" disabled={!isOwner} {...bind("workspaceName")} />
+            </Field>
+            <Field label="Default currency" hint="Pre-filled on new records. Each record keeps its own currency.">
+              <select className="input" disabled={!isOwner} {...bind("defaultCurrency")}>
+                {[...new Set([f.defaultCurrency, ...CURRENCIES])].map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+            <p className="text-sm text-muted sm:col-span-2">
+              {ws.kind === "personal" ? "Personal workspace. Only you can see it." : "Shared family workspace."} Member since{" "}
+              {formatDate(user.createdAt)}.
+            </p>
+          </div>
+        </Section>
+      )}
+
+      {error && (
+        <div className="mb-4">
+          <ErrorNote message={error} />
+        </div>
+      )}
+      <div className="mb-8 flex items-center gap-3">
+        <button className="btn-primary" disabled={busy}>
+          {busy && <Loader2 size={16} className="animate-spin" />} Save profile
+        </button>
+        <Saved show={saved} />
+      </div>
+    </form>
+  );
+}
+
+function PasswordForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setDone(false);
+    if (next !== confirm) return setError("New passwords don't match");
+    if (next.length < 10) return setError("Use at least 10 characters");
+    setBusy(true);
+    try {
+      await changePassword(current, next);
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not change password");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Section title="Password & security">
+      <form onSubmit={(e) => void submit(e)} className="card grid gap-4 p-4 sm:grid-cols-3">
+        <Field label="Current password">
+          <input className="input" type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
+        </Field>
+        <Field label="New password">
+          <input className="input" type="password" autoComplete="new-password" required minLength={10} value={next} onChange={(e) => setNext(e.target.value)} />
+        </Field>
+        <Field label="Confirm new password">
+          <input className="input" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        </Field>
+        <div className="flex flex-wrap items-center gap-3 sm:col-span-3">
+          <button className="btn-secondary" disabled={busy}>
+            {busy && <Loader2 size={16} className="animate-spin" />} Change password
+          </button>
+          {done && (
+            <span className="inline-flex items-center gap-1 text-sm text-ok">
+              <CheckCircle2 size={16} /> Password changed. Other devices were signed out.
+            </span>
+          )}
+          {error && <span className="text-sm text-danger">{error}</span>}
+        </div>
+      </form>
+    </Section>
+  );
+}
+
+export default function ProfilePage() {
+  const { data, error, loading, setData } = useApi<{ user: User }>("/auth/me");
+
+  if (loading && !data) return <Spinner />;
+  if (error) return <ErrorNote message={error} />;
+  if (!data) return null;
+
+  return (
+    <>
+      <PageHeader
+        title="Profile"
+        subtitle="Your details, reminder preferences and security."
+        actions={
+          <button className="btn-ghost" onClick={() => void logout()}>
+            <LogOut size={16} /> Sign out
+          </button>
+        }
+      />
+      <ProfileForm user={data.user} onSaved={(u) => setData({ user: u })} />
+      <PasswordForm />
+    </>
+  );
+}

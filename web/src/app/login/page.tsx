@@ -49,6 +49,9 @@ function LoginForm() {
   return (
     <main className="flex min-h-dvh items-center justify-center px-4">
       <div className="w-full max-w-sm">
+        <a href="/welcome" className="mb-6 inline-block text-sm text-muted hover:text-text">
+          ← About Capture Hub
+        </a>
         <h1 className="text-2xl font-semibold tracking-tight">Capture Hub</h1>
         <p className="mb-6 mt-1 text-sm text-muted">Your private place for payment proof, expenses and everything worth keeping.</p>
         <form onSubmit={(e) => void submit(e)} className="card space-y-4 p-5">

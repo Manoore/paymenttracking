@@ -6,6 +6,14 @@ const userSchema = new Schema(
     passwordHash: { type: String, required: true, select: false },
     name: { type: String, required: true, trim: true },
     defaultWorkspaceId: { type: Schema.Types.ObjectId, ref: "Workspace" },
+    phone: { type: String, trim: true },
+    timezone: String, // IANA zone; unset until the user saves their profile (clients default to device zone)
+    preferences: {
+      emailReminders: { type: Boolean, default: true },
+      // Optional separate address for reminders (e.g. a shared household inbox).
+      reminderEmail: { type: String, trim: true, lowercase: true },
+    },
+    passwordChangedAt: Date,
   },
   { timestamps: true },
 );

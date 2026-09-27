@@ -41,7 +41,9 @@ export async function runReminders(now = new Date()) {
       await Notification.create({ workspaceId: s.workspaceId, userId: m.userId, kind: overdue ? "overdue" : "due_soon", title, body, scheduleId: s._id });
       created++;
       const user = await User.findById(m.userId).lean();
-      if (user && (await sendEmail(user.email, title, `${body}\n\nOpen: ${config.WEB_APP_URL}/recurring/${s._id}`))) emailed++;
+      const wantsEmail = user && user.preferences?.emailReminders !== false;
+      const to = user?.preferences?.reminderEmail || user?.email;
+      if (wantsEmail && to && (await sendEmail(to, title, `${body}\n\nOpen: ${config.WEB_APP_URL}/recurring/${s._id}`))) emailed++;
     }
     s.lastRemindedFor = s.nextDueDate;
     await s.save();

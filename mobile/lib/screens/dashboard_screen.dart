@@ -24,7 +24,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('Capture Hub'),
         actions: [
           IconButton(tooltip: 'Inbox', icon: const Icon(Icons.inbox_outlined), onPressed: () => context.push('/inbox')),
-          IconButton(tooltip: 'Sign out', icon: const Icon(Icons.logout), onPressed: api.logout),
+          IconButton(tooltip: 'Profile', icon: const Icon(Icons.account_circle_outlined), onPressed: () => context.push('/profile')),
         ],
       ),
       body: AsyncView<Dashboard>(

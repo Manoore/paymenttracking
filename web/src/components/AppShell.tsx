@@ -11,6 +11,7 @@ import {
   Plus,
   Repeat,
   Search,
+  UserRound,
 } from "lucide-react";
 import { logout } from "@/lib/api";
 
@@ -55,6 +56,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <Link
+          href="/profile"
+          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
+            isActive(pathname, "/profile") ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text"
+          }`}
+        >
+          <UserRound size={18} /> Profile
+        </Link>
         <button onClick={() => void logout()} className="btn-ghost justify-start">
           <LogOut size={18} /> Sign out
         </button>
@@ -72,9 +81,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/reports" aria-label="Reports" className="btn-ghost px-3">
               <BarChart3 size={20} />
             </Link>
-            <button onClick={() => void logout()} aria-label="Sign out" className="btn-ghost px-3">
-              <LogOut size={20} />
-            </button>
+            <Link href="/profile" aria-label="Profile" className="btn-ghost px-3">
+              <UserRound size={20} />
+            </Link>
           </div>
         </header>
 

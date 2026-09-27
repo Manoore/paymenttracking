@@ -8,6 +8,7 @@ import 'screens/capture_detail_screen.dart';
 import 'screens/capture_form_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/recurring_screens.dart';
 import 'screens/reimbursements_screen.dart';
 import 'screens/shell.dart';
@@ -48,6 +49,7 @@ class _CaptureHubAppState extends State<CaptureHubApp> {
           StatefulShellBranch(routes: [GoRoute(path: '/owed', builder: (_, _) => const ReimbursementsScreen())]),
         ],
       ),
+      GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/inbox', builder: (_, _) => const ActivityScreen(inbox: true)),
       GoRoute(
         path: '/new',

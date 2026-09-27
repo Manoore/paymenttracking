@@ -97,6 +97,10 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
+  timezone: string | null;
+  preferences: { emailReminders: boolean; reminderEmail: string | null };
+  createdAt: string;
   defaultWorkspaceId: string;
   workspaces: Workspace[];
 }
