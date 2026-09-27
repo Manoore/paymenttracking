@@ -1,0 +1,37 @@
+# Render Blueprint for the Capture Hub API.
+# Render dashboard -> New -> Blueprint -> pick this repo. Secrets marked `sync: false`
+# are prompted for on first deploy and never stored in git.
+services:
+  - type: web
+    name: capture-hub-api
+    runtime: node
+    rootDir: backend
+    plan: free # sleeps after ~15 min idle (first request then takes ~1 min); switch to starter for always-on
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false # e.g. https://capture-hub.vercel.app
+      - key: WEB_APP_URL
+        sync: false
+      - key: ALLOW_SIGNUP
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: REMINDER_FROM_EMAIL
+        sync: false

@@ -1,0 +1,21 @@
+name: Payment reminders
+
+# Wakes the Render API (free/starter instances may sleep) and runs the
+# idempotent reminders job. Needs repo secrets API_URL and CRON_SECRET.
+on:
+  schedule:
+    - cron: "0 13 * * *" # daily, 13:00 UTC (morning in the US)
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminders
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 20 --retry-all-errors \
+            -X POST "$API_URL/internal/jobs/reminders" \
+            -H "x-cron-secret: $CRON_SECRET"
