@@ -1,0 +1,302 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../api.dart';
+import '../format.dart';
+import '../models.dart';
+import '../widgets.dart';
+
+const _finance = {'payment', 'expense', 'deposit'};
+const _counterpartyLabel = {'payment': 'Paid to', 'expense': 'Merchant', 'deposit': 'Payer'};
+
+/// Create a new capture, or edit/file an existing one (when [capture] is set).
+class CaptureFormScreen extends StatefulWidget {
+  const CaptureFormScreen({super.key, this.capture, this.initialType});
+  final Capture? capture;
+  final String? initialType;
+  @override
+  State<CaptureFormScreen> createState() => _CaptureFormScreenState();
+}
+
+class _CaptureFormScreenState extends State<CaptureFormScreen> {
+  late String _type;
+  late DateTime _date;
+  final _c = <String, TextEditingController>{};
+  bool _reimbursable = false;
+  String _status = 'to_submit';
+  bool _cleared = false;
+  final List<PickedUpload> _files = [];
+  bool _saving = false;
+  Map<String, List<String>> _suggest = {};
+
+  TextEditingController c(String k) => _c.putIfAbsent(k, TextEditingController.new);
+
+  @override
+  void initState() {
+    super.initState();
+    final x = widget.capture;
+    _type = x?.type ?? (captureTypes.contains(widget.initialType) ? widget.initialType! : 'payment');
+    _date = x?.occurredAt ?? todayUtc();
+    c('title').text = x?.title ?? '';
+    c('amount').text = minorToInput(x?.amountMinor);
+    c('currency').text = x?.currency ?? 'USD';
+    c('counterparty').text = x?.counterparty ?? '';
+    c('category').text = x?.category ?? '';
+    c('property').text = x?.property ?? '';
+    c('trip').text = x?.trip ?? '';
+    c('tags').text = x?.tags.join(', ') ?? '';
+    c('notes').text = x?.notes ?? '';
+    c('url').text = x?.url ?? '';
+    c('method').text = x?.method ?? '';
+    c('confirmation').text = x?.confirmationNumber ?? '';
+    c('checkNumber').text = x?.checkNumber ?? '';
+    c('bankAccount').text = x?.bankAccount ?? '';
+    c('organization').text = x?.reimbursement?.organization ?? '';
+    c('reimbursedAmount').text = minorToInput(x?.reimbursement?.amountReimbursedMinor);
+    _reimbursable = x?.reimbursable ?? false;
+    _status = x?.reimbursement?.status ?? 'to_submit';
+    _cleared = x?.cleared ?? false;
+    _loadSuggestions();
+  }
+
+  Future<void> _loadSuggestions() async {
+    final api = context.read<Api>();
+    final fields = ['counterparty', 'category', 'property', 'trip', 'organization', 'method'];
+    try {
+      final results = await Future.wait(fields.map((f) => api.get('/suggestions', {'field': f})));
+      if (!mounted) return;
+      setState(() => _suggest = {
+            for (var i = 0; i < fields.length; i++) fields[i]: ((results[i] as Map)['values'] as List).cast<String>(),
+          });
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    for (final ctrl in _c.values) {
+      ctrl.dispose();
+    }
+    super.dispose();
+  }
+
+  String? _blank(String k) => c(k).text.trim().isEmpty ? null : c(k).text.trim();
+
+  String _defaultTitle() {
+    final who = c('counterparty').text.trim();
+    switch (_type) {
+      case 'payment':
+        return who.isEmpty ? 'Payment' : 'Payment to $who';
+      case 'expense':
+        return who.isEmpty ? 'Expense' : 'Expense at $who';
+      case 'deposit':
+        return who.isEmpty ? 'Check deposit' : 'Check from $who';
+      case 'link':
+        final u = c('url').text.trim();
+        return u.isEmpty ? 'Saved link' : u.replaceFirst(RegExp(r'^https?://'), '');
+      default:
+        return _files.isNotEmpty ? 'Screenshot ${formatDate(todayUtc())}' : 'Untitled note';
+    }
+  }
+
+  Map<String, dynamic> _payload() {
+    final isFinance = _finance.contains(_type);
+    return {
+      'type': _type,
+      'title': _blank('title') ?? _defaultTitle(),
+      'notes': _blank('notes'),
+      'tags': c('tags').text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList(),
+      'category': _blank('category'),
+      'property': _blank('property'),
+      'trip': _blank('trip'),
+      'counterparty': _blank('counterparty'),
+      'url': _blank('url'),
+      'occurredAt': isoDate(_date),
+      'amountMinor': isFinance ? parseMoney(c('amount').text) : null,
+      'currency': (_blank('currency') ?? 'USD').toUpperCase(),
+      'payment': _type == 'payment' ? {'method': _blank('method'), 'confirmationNumber': _blank('confirmation')} : null,
+      'expense': _type == 'expense'
+          ? {
+              'paymentMethod': _blank('method'),
+              'reimbursable': _reimbursable,
+              'reimbursement': _reimbursable
+                  ? {
+                      'organization': _blank('organization'),
+                      'status': _status,
+                      'amountReimbursedMinor': parseMoney(c('reimbursedAmount').text) ?? 0,
+                    }
+                  : null,
+            }
+          : null,
+      'deposit': _type == 'deposit'
+          ? {'checkNumber': _blank('checkNumber'), 'bankAccount': _blank('bankAccount'), 'cleared': _cleared}
+          : null,
+    };
+  }
+
+  Future<void> _save({bool toInbox = false}) async {
+    setState(() => _saving = true);
+    final api = context.read<Api>();
+    try {
+      final body = _payload();
+      Map<String, dynamic> saved;
+      if (widget.capture == null) {
+        body.removeWhere((k, v) => v == null);
+        if (toInbox) body['filed'] = false;
+        body['source'] = _files.isEmpty ? 'manual' : 'upload';
+        saved = await api.post('/captures', body) as Map<String, dynamic>;
+      } else {
+        body['filed'] = true;
+        saved = await api.patch('/captures/${widget.capture!.id}', body) as Map<String, dynamic>;
+      }
+      if (_files.isNotEmpty) await api.upload(_files, captureId: saved['_id'] as String);
+      if (!mounted) return;
+      if (widget.capture == null) {
+        context.pushReplacement('/captures/${saved['_id']}');
+      } else {
+        context.pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        showError(context, e);
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Widget _field(String k, String label, {String? hint, TextInputType? keyboard, int maxLines = 1}) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: c(k),
+          keyboardType: keyboard,
+          maxLines: maxLines,
+          decoration: InputDecoration(labelText: label, hintText: hint, border: const OutlineInputBorder()),
+        ),
+      );
+
+  Widget _suggestField(String k, String label, {String? hint, String? suggestKey}) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: SuggestField(controller: c(k), label: label, hint: hint, options: _suggest[suggestKey ?? k] ?? const []),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final isNew = widget.capture == null;
+    final isFinance = _finance.contains(_type);
+    return Scaffold(
+      appBar: AppBar(title: Text(isNew ? 'New capture' : (widget.capture!.filed ? 'Edit' : 'File capture'))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        children: [
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final t in captureTypes)
+              ChoiceChip(label: Text(typeLabels[t]!), selected: _type == t, onSelected: (_) => setState(() => _type = t)),
+          ]),
+          const SizedBox(height: 16),
+          if (isNew) ...[
+            OutlinedButton.icon(
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      final picked = await pickUploads(context);
+                      if (picked.isNotEmpty) setState(() => _files.addAll(picked));
+                    },
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Add photo, screenshot or PDF'),
+            ),
+            PendingUploads(files: _files, onRemove: (i) => setState(() => _files.removeAt(i))),
+            const SizedBox(height: 16),
+          ],
+          if (isFinance) ...[
+            Row(children: [
+              Expanded(child: _field('amount', 'Amount', keyboard: const TextInputType.numberWithOptions(decimal: true))),
+              const SizedBox(width: 8),
+              SizedBox(width: 90, child: _field('currency', 'Currency')),
+            ]),
+            _suggestField('counterparty', _counterpartyLabel[_type]!),
+          ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: InputDecorator(
+              decoration: const InputDecoration(labelText: 'Date', border: OutlineInputBorder()),
+              child: InkWell(
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: _date.toLocal(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (d != null) setState(() => _date = DateTime.utc(d.year, d.month, d.day));
+                },
+                child: Text(formatDate(_date)),
+              ),
+            ),
+          ),
+          _field('title', 'Title', hint: _defaultTitle()),
+          if (_type == 'link') _field('url', 'URL', keyboard: TextInputType.url),
+          _suggestField('category', 'Category', hint: 'HOA, Utilities, Travel…'),
+          if (_type == 'payment' || _type == 'expense') _suggestField('property', 'Property', hint: 'e.g. Oak Grove'),
+          if (_type != 'deposit') _suggestField('trip', 'Trip / project'),
+          if (_type == 'payment' || _type == 'expense') _suggestField('method', 'Payment method', hint: 'ACH, Visa, Zelle…'),
+          if (_type == 'payment') _field('confirmation', 'Confirmation #'),
+          if (_type == 'deposit') ...[
+            _field('checkNumber', 'Check #'),
+            _field('bankAccount', 'Deposited to', hint: 'e.g. Chase checking'),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Cleared in my account'),
+              value: _cleared,
+              onChanged: (v) => setState(() => _cleared = v),
+            ),
+          ],
+          if (_type == 'expense') ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Someone owes me for this'),
+              subtitle: const Text('Track as reimbursable'),
+              value: _reimbursable,
+              onChanged: (v) => setState(() => _reimbursable = v),
+            ),
+            if (_reimbursable) ...[
+              _suggestField('organization', 'Reimbursed by', hint: 'Work, India Club…'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: DropdownButtonFormField<String>(
+                  initialValue: _status,
+                  decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
+                  items: [for (final e in statusLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                  onChanged: (v) => setState(() => _status = v ?? 'to_submit'),
+                ),
+              ),
+              if (_status == 'partial' || _status == 'reimbursed')
+                _field('reimbursedAmount', 'Amount reimbursed', keyboard: const TextInputType.numberWithOptions(decimal: true)),
+            ],
+          ],
+          _field('tags', 'Tags', hint: 'Comma separated'),
+          _field('notes', 'Notes', maxLines: 4),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(children: [
+            if (isNew)
+              Expanded(
+                child: OutlinedButton(onPressed: _saving ? null : () => _save(toInbox: true), child: const Text('Save to inbox')),
+              ),
+            if (isNew) const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(isNew ? 'Save' : 'Save changes'),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
