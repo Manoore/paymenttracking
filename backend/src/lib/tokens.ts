@@ -41,22 +41,49 @@ export async function issueRefreshToken(userId: string, family?: string, userAge
   return token;
 }
 
+// Two tabs or a flaky mobile network can legitimately present the same token twice
+// within a few seconds; treat that as a race, not theft.
+const REUSE_GRACE_MS = 30_000;
+
 /**
- * Rotate a refresh token. Re-use of an already-rotated token means it leaked,
- * so the whole token family (that login session) is revoked.
+ * Rotate a refresh token. Re-use of an already-rotated token (outside a short
+ * grace window) means it leaked, so the whole token family is revoked.
  */
 export async function rotateRefreshToken(token: string, userAgent?: string) {
   const record = await RefreshToken.findOne({ tokenHash: hash(token) });
   if (!record || record.expiresAt < new Date()) throw unauthorized("Session expired");
   if (record.revokedAt) {
-    await RefreshToken.updateMany({ family: record.family }, { revokedAt: new Date() });
-    throw unauthorized("Session revoked");
+    const familyActive = await RefreshToken.exists({ family: record.family, revokedAt: { $exists: false } });
+    if (!familyActive || Date.now() - record.revokedAt.getTime() > REUSE_GRACE_MS) {
+      await RefreshToken.updateMany({ family: record.family }, { revokedAt: new Date() });
+      throw unauthorized("Session revoked");
+    }
+  } else {
+    record.revokedAt = new Date();
+    await record.save();
   }
-  record.revokedAt = new Date();
-  await record.save();
   const userId = record.userId.toString();
   const refreshToken = await issueRefreshToken(userId, record.family, userAgent);
   return { userId, refreshToken, accessToken: signAccessToken(userId) };
+}
+
+const fileSecret = () => `${config.JWT_ACCESS_SECRET}:files`;
+
+/**
+ * Short-lived signed URL token for one attachment, so <img src> and mobile
+ * image widgets can load files without putting the bearer token in the URL.
+ */
+export function signFileToken(attachmentId: string, ttlSeconds = 3600) {
+  return jwt.sign({ aid: attachmentId }, fileSecret(), { expiresIn: ttlSeconds, issuer: "capture-hub-files" });
+}
+
+export function verifyFileToken(token: string, attachmentId: string) {
+  try {
+    const p = jwt.verify(token, fileSecret(), { issuer: "capture-hub-files" });
+    return typeof p !== "string" && p.aid === attachmentId;
+  } catch {
+    return false;
+  }
 }
 
 export async function revokeRefreshToken(token: string) {

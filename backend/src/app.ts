@@ -9,7 +9,7 @@ import { unauthorized } from "./lib/errors.js";
 import { runReminders } from "./jobs/reminders.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
-import { attachmentsRouter } from "./routes/attachments.js";
+import { attachmentsRouter, filesRouter } from "./routes/attachments.js";
 import { authRouter } from "./routes/auth.js";
 import { capturesRouter } from "./routes/captures.js";
 import { insightsRouter } from "./routes/insights.js";
@@ -51,6 +51,7 @@ export function createApp() {
   api.use("/recurring", requireAuth, recurringRouter);
   api.use("/", requireAuth, insightsRouter);
   app.use("/api/v1", api);
+  app.use("/files", filesRouter);
 
   // Scheduled jobs, triggered externally with a shared secret.
   app.post("/internal/jobs/reminders", async (req, res) => {

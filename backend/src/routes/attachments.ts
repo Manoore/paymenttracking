@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { config } from "../config.js";
 import { badRequest, notFound } from "../lib/errors.js";
+import { signFileToken, verifyFileToken } from "../lib/tokens.js";
 import { objectId } from "../lib/validation.js";
 import { ctx, requireWrite } from "../middleware/auth.js";
 import { Attachment } from "../models/Attachment.js";
@@ -11,6 +12,50 @@ import { storage, storageFor } from "../storage/index.js";
 import { loadCapture } from "./captures.js";
 
 export const attachmentsRouter = Router();
+/** Public router: serves a file only with a valid signed `sig` for that attachment. */
+export const filesRouter = Router();
+
+type AttachmentLike = { _id: { toString(): string }; mimeType: string; size: number; filename: string; storage?: { driver: string; key: string } | null };
+
+/** Attach a signed, expiring URL (relative to the API origin) that clients can load directly. */
+export function withUrl<T extends { _id: { toString(): string } }>(att: T) {
+  const id = att._id.toString();
+  return { ...att, url: `/files/${id}?sig=${signFileToken(id)}` };
+}
+
+function streamAttachment(req: Request, res: Response, att: AttachmentLike) {
+  const disposition = req.query.download === "1" ? "attachment" : "inline";
+  res.setHeader("Content-Type", att.mimeType);
+  res.setHeader("Content-Length", String(att.size));
+  res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(att.filename)}"`);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+  void storageFor(att.storage!.driver)
+    .get(att.storage!.key)
+    .then((stream) => {
+      stream.on("error", (err) => {
+        req.log?.error({ err }, "attachment stream failed");
+        if (!res.headersSent) res.status(500).end();
+        else res.destroy(err);
+      });
+      stream.pipe(res);
+    })
+    .catch((err) => {
+      req.log?.error({ err }, "attachment open failed");
+      if (!res.headersSent) res.status(500).end();
+    });
+}
+
+filesRouter.get("/:id", async (req, res) => {
+  const id = String(req.params.id);
+  const sig = typeof req.query.sig === "string" ? req.query.sig : "";
+  if (!objectId.safeParse(id).success || !verifyFileToken(sig, id)) throw notFound("File");
+  const att = await Attachment.findOne({ _id: id, deletedAt: { $exists: false } });
+  if (!att) throw notFound("File");
+  streamAttachment(req, res, att);
+});
 
 const ALLOWED = new Set([
   "image/jpeg",
@@ -82,7 +127,7 @@ attachmentsRouter.post("/", requireWrite, upload.array("files", 10), async (req,
     await capture.save();
     await syncExtractedText(capture._id.toString());
   }
-  res.status(201).json({ items: created.map((a) => a.toObject()) });
+  res.status(201).json({ items: created.map((a) => withUrl(a.toObject())) });
 });
 
 /** Mirror attachment text onto the capture so a single query searches both. */
@@ -94,25 +139,12 @@ async function syncExtractedText(captureId: string) {
 
 attachmentsRouter.get("/:id", async (req, res) => {
   const att = await loadAttachment(req, String(req.params.id));
-  res.json(att.toObject());
+  res.json(withUrl(att.toObject()));
 });
 
 attachmentsRouter.get("/:id/content", async (req, res) => {
   const att = await loadAttachment(req, String(req.params.id));
-  const stream = await storageFor(att.storage!.driver).get(att.storage!.key);
-  const disposition = req.query.download === "1" ? "attachment" : "inline";
-  res.setHeader("Content-Type", att.mimeType);
-  res.setHeader("Content-Length", String(att.size));
-  res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(att.filename)}"`);
-  res.setHeader("Cache-Control", "private, max-age=3600");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
-  stream.on("error", (err) => {
-    req.log?.error({ err }, "attachment stream failed");
-    if (!res.headersSent) res.status(500).end();
-    else res.destroy(err);
-  });
-  stream.pipe(res);
+  streamAttachment(req, res, att);
 });
 
 attachmentsRouter.delete("/:id", requireWrite, async (req, res) => {

@@ -7,6 +7,7 @@ import { ctx, requireWrite, scope } from "../middleware/auth.js";
 import { Attachment } from "../models/Attachment.js";
 import { Capture, type CaptureDoc } from "../models/Capture.js";
 import { Workspace } from "../models/identity.js";
+import { withUrl } from "./attachments.js";
 
 export const capturesRouter = Router();
 
@@ -110,7 +111,7 @@ capturesRouter.get("/:id", async (req, res) => {
       .select("title type amountMinor currency occurredAt counterparty links")
       .lean(),
   ]);
-  res.json({ ...doc.toObject(), attachments, linked, backlinks });
+  res.json({ ...doc.toObject(), attachments: attachments.map(withUrl), linked, backlinks });
 });
 
 capturesRouter.patch("/:id", requireWrite, async (req, res) => {

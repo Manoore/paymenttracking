@@ -2,7 +2,7 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { runReminders } from "../src/jobs/reminders.js";
-import { Membership, User, Workspace } from "../src/models/identity.js";
+import { Membership, RefreshToken, User, Workspace } from "../src/models/identity.js";
 
 const app = createApp();
 const PNG = Buffer.from(
@@ -36,7 +36,10 @@ describe("auth", () => {
     await request(app).post("/api/v1/auth/login").send({ email: "me@example.com", password: "wrong-password" }).expect(401);
 
     const r1 = await request(app).post("/api/v1/auth/refresh").send({ refreshToken: s.refreshToken }).expect(200);
-    // Re-using the old token is treated as theft: family is revoked.
+    // A near-simultaneous duplicate (two tabs) is tolerated within the grace window.
+    await request(app).post("/api/v1/auth/refresh").send({ refreshToken: s.refreshToken }).expect(200);
+    // Re-use after the grace window is treated as theft: the whole family is revoked.
+    await RefreshToken.updateMany({}, [{ $set: { revokedAt: { $cond: [{ $ifNull: ["$revokedAt", false] }, new Date(Date.now() - 60_000), "$revokedAt"] } } }]);
     await request(app).post("/api/v1/auth/refresh").send({ refreshToken: s.refreshToken }).expect(401);
     await request(app).post("/api/v1/auth/refresh").send({ refreshToken: r1.body.refreshToken }).expect(401);
   });
@@ -130,6 +133,11 @@ describe("captures", () => {
 
     const detail = await request(app).get(`/api/v1/captures/${cap.body._id}`).set(auth()).expect(200);
     expect(detail.body.attachments).toHaveLength(1);
+
+    // Signed URL works without a bearer token; tampered signature does not.
+    const signed = await request(app).get(detail.body.attachments[0].url).expect(200);
+    expect(Buffer.compare(signed.body, PNG)).toBe(0);
+    await request(app).get(`/files/${att._id}?sig=nope`).expect(404);
 
     await request(app)
       .post("/api/v1/attachments")
