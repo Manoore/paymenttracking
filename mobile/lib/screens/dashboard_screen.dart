@@ -46,6 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             tooltip: 'More',
             onSelected: (route) => context.push(route),
             itemBuilder: (_) => const [
+              PopupMenuItem(value: '/places', child: ListTile(leading: Icon(Icons.place_outlined), title: Text('Places & ideas'))),
               PopupMenuItem(value: '/properties', child: ListTile(leading: Icon(Icons.home_work_outlined), title: Text('Properties'))),
               PopupMenuItem(value: '/family', child: ListTile(leading: Icon(Icons.family_restroom), title: Text('Family & sharing'))),
               PopupMenuItem(value: '/profile', child: ListTile(leading: Icon(Icons.account_circle_outlined), title: Text('Profile'))),

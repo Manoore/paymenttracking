@@ -124,6 +124,14 @@ capturesRouter.get("/", async (req, res) => {
   ]);
   let didYouMean: string | undefined;
   if (!total && filters.q && filters.q.length >= 3) didYouMean = await suggestSpelling(req, filters.q);
+  // ?thumbs=1: add a signed URL for each record's first image (for card/grid views).
+  if (req.query.thumbs === "1" && items.length) {
+    const firstIds = items.map((c) => c.attachmentIds?.[0]).filter(Boolean);
+    const images = await Attachment.find({ _id: { $in: firstIds }, mimeType: /^image\//, deletedAt: { $exists: false } }).lean();
+    const byId = new Map(images.map((a) => [a._id.toString(), withUrl(a).url]));
+    const withThumbs = items.map((c) => ({ ...c, thumbUrl: byId.get(c.attachmentIds?.[0]?.toString() ?? "") ?? null }));
+    return res.json({ items: withThumbs, total, page, limit, didYouMean });
+  }
   res.json({ items, total, page, limit, didYouMean });
 });
 

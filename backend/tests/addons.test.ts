@@ -142,3 +142,21 @@ describe("saved properties", () => {
     expect(list.body.items[0].id).toBeUndefined();
   });
 });
+
+describe("thumbnails in lists", () => {
+  it("adds a signed thumbnail URL for records whose first attachment is an image", async () => {
+    const { auth, post } = await session();
+    const PNG = Buffer.from(
+      "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a5d50000000049454e44ae426082",
+      "hex",
+    );
+    const place = await post({ type: "place", title: "Paradise Biryani", place: { kind: "restaurant", address: "Fremont, CA" } });
+    await request(app).post("/api/v1/attachments").set(auth).field("captureId", place.body._id).attach("files", PNG, { filename: "p.png", contentType: "image/png" }).expect(201);
+    await post({ type: "idea", title: "Standing desk", idea: { kind: "product" } });
+    const r = await request(app).get("/api/v1/captures?type=place,idea&thumbs=1").set(auth).expect(200);
+    const byTitle = Object.fromEntries(r.body.items.map((i: { title: string; thumbUrl: string | null }) => [i.title, i.thumbUrl]));
+    expect(byTitle["Paradise Biryani"]).toMatch(/^\/files\/.+\?sig=/);
+    expect(byTitle["Standing desk"]).toBeNull();
+    await request(app).get(byTitle["Paradise Biryani"]).expect(200);
+  });
+});

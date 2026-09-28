@@ -11,6 +11,7 @@ import 'screens/login_screen.dart';
 import 'screens/family_screen.dart';
 import 'screens/household_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/places_screen.dart';
 import 'screens/properties_screen.dart';
 import 'screens/reader_settings_screen.dart';
 import 'screens/recurring_screens.dart';
@@ -65,6 +66,10 @@ class _CaptureHubAppState extends State<CaptureHubApp> {
       GoRoute(path: '/family', builder: (_, _) => const FamilyScreen()),
       GoRoute(path: '/reader', builder: (_, _) => const ReaderSettingsScreen()),
       GoRoute(path: '/properties', builder: (_, _) => const PropertiesScreen()),
+      GoRoute(
+        path: '/places',
+        builder: (_, state) => PlacesScreen(initialTab: state.uri.queryParameters['tab'] == 'ideas' ? 1 : 0),
+      ),
       GoRoute(path: '/properties/:name', builder: (_, state) => PropertyDetailScreen(name: state.pathParameters['name']!)),
       GoRoute(path: '/household', builder: (_, _) => const HouseholdScreen()),
       GoRoute(path: '/inbox', builder: (_, _) => const ActivityScreen(inbox: true)),

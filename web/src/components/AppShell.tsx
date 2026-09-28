@@ -28,7 +28,7 @@ const NAV = [
   { href: "/recurring", label: "Recurring", icon: Repeat },
   { href: "/reimbursements", label: "Reimbursements", icon: HandCoins },
   { href: "/properties", label: "Properties", icon: Building2 },
-  { href: "/activity?type=place,idea", label: "Places & ideas", icon: MapPin },
+  { href: "/places", label: "Places & ideas", icon: MapPin },
   { href: "/reports", label: "Reports", icon: BarChart3 },
 ];
 
@@ -132,6 +132,9 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1">
             <Link href="/inbox" aria-label="Inbox" className="btn-ghost px-3">
               <Inbox size={20} />
+            </Link>
+            <Link href="/places" aria-label="Places & ideas" className="btn-ghost px-3">
+              <MapPin size={20} />
             </Link>
             <Link href="/reports" aria-label="Reports" className="btn-ghost px-3">
               <BarChart3 size={20} />
