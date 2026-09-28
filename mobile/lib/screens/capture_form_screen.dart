@@ -7,8 +7,9 @@ import '../format.dart';
 import '../models.dart';
 import '../widgets.dart';
 
-const _finance = {'payment', 'expense', 'deposit'};
-const _counterpartyLabel = {'payment': 'Paid to', 'expense': 'Merchant', 'deposit': 'Payer'};
+const _finance = {'payment', 'expense', 'deposit', 'idea'};
+const _purchase = {'payment', 'expense'};
+const _counterpartyLabel = {'payment': 'Paid to', 'expense': 'Merchant', 'deposit': 'Payer', 'idea': 'Store / brand'};
 
 /// Create a new capture, or edit/file an existing one (when [capture] is set).
 class CaptureFormScreen extends StatefulWidget {
@@ -26,6 +27,12 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
   bool _reimbursable = false;
   String _status = 'to_submit';
   bool _cleared = false;
+  DateTime? _returnBy;
+  DateTime? _warrantyUntil;
+  DateTime? _expiresAt;
+  String _docKind = 'other';
+  bool _visited = false;
+  String _ideaStatus = 'want';
   final List<PickedUpload> _files = [];
   bool _saving = false;
   Map<String, List<String>> _suggest = {};
@@ -57,6 +64,16 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
     _reimbursable = x?.reimbursable ?? false;
     _status = x?.reimbursement?.status ?? 'to_submit';
     _cleared = x?.cleared ?? false;
+    _returnBy = x?.returnBy;
+    _warrantyUntil = x?.warrantyUntil;
+    _expiresAt = x?.expiresAt;
+    _docKind = x?.docKind ?? 'other';
+    _visited = x?.visited ?? false;
+    _ideaStatus = x?.ideaStatus ?? 'want';
+    c('docReference').text = x?.docReference ?? '';
+    c('address').text = x?.address ?? '';
+    c('mapUrl').text = x?.mapUrl ?? '';
+    c('owedAmount').text = minorToInput(x?.reimbursement?.amountOwedMinor);
     _loadSuggestions();
   }
 
@@ -91,6 +108,13 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
         return who.isEmpty ? 'Expense' : 'Expense at $who';
       case 'deposit':
         return who.isEmpty ? 'Check deposit' : 'Check from $who';
+      case 'document':
+        return docKindLabels[_docKind] ?? 'Document';
+      case 'place':
+        final addr = c('address').text.trim();
+        return addr.isEmpty ? 'Place to remember' : addr.split(',').first;
+      case 'idea':
+        return 'Idea';
       case 'link':
         final u = c('url').text.trim();
         return u.isEmpty ? 'Saved link' : u.replaceFirst(RegExp(r'^https?://'), '');
@@ -123,11 +147,19 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
               'reimbursement': _reimbursable
                   ? {
                       'status': _status,
+                      'amountOwedMinor': parseMoney(c('owedAmount').text),
                       'amountReimbursedMinor': parseMoney(c('reimbursedAmount').text) ?? 0,
                     }
                   : null,
             }
           : null,
+      'returnBy': _purchase.contains(_type) && _returnBy != null ? isoDate(_returnBy!) : null,
+      'warrantyUntil': _purchase.contains(_type) && _warrantyUntil != null ? isoDate(_warrantyUntil!) : null,
+      'document': _type == 'document'
+          ? {'kind': _docKind, 'reference': _blank('docReference'), 'expiresAt': _expiresAt == null ? null : isoDate(_expiresAt!)}
+          : null,
+      'place': _type == 'place' ? {'address': _blank('address'), 'mapUrl': _blank('mapUrl'), 'visited': _visited} : null,
+      'idea': _type == 'idea' ? {'status': _ideaStatus} : null,
       'deposit': _type == 'deposit'
           ? {'checkNumber': _blank('checkNumber'), 'bankAccount': _blank('bankAccount'), 'cleared': _cleared}
           : null,
@@ -163,6 +195,29 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
       }
     }
   }
+
+  Widget _dateField(String label, DateTime? value, void Function(DateTime?) onChanged) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+            suffixIcon: value == null ? null : IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => onChanged(null))),
+          ),
+          child: InkWell(
+            onTap: () async {
+              final d = await showDatePicker(
+                context: context,
+                initialDate: (value ?? todayUtc()).toLocal(),
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
+              );
+              if (d != null) setState(() => onChanged(DateTime.utc(d.year, d.month, d.day)));
+            },
+            child: Text(value == null ? 'Not set' : formatDate(value)),
+          ),
+        ),
+      );
 
   Widget _field(String k, String label, {String? hint, TextInputType? keyboard, int maxLines = 1}) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -241,6 +296,49 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
           _suggestField('organization', 'Organization', hint: 'India Club, Work…'),
           if (_type == 'payment' || _type == 'expense') _suggestField('method', 'Payment method', hint: 'ACH, Visa, Zelle…'),
           if (_type == 'payment') _field('confirmation', 'Confirmation #'),
+          if (_type == 'document') ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<String>(
+                initialValue: _docKind,
+                decoration: const InputDecoration(labelText: 'Kind of document', border: OutlineInputBorder()),
+                items: [for (final e in docKindLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                onChanged: (v) => setState(() => _docKind = v ?? 'other'),
+              ),
+            ),
+            _dateField('Expires / renews on', _expiresAt, (d) => _expiresAt = d),
+            _field('docReference', 'Reference', hint: 'Last 4 digits only'),
+          ],
+          if (_type == 'place') ...[
+            _field('address', 'Address or area'),
+            _field('mapUrl', 'Map link', keyboard: TextInputType.url),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Been there'),
+              value: _visited,
+              onChanged: (v) => setState(() => _visited = v),
+            ),
+          ],
+          if (_type == 'idea') ...[
+            _field('url', 'Link', keyboard: TextInputType.url),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<String>(
+                initialValue: _ideaStatus,
+                decoration: const InputDecoration(labelText: 'Status', border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: 'want', child: Text('Want / open')),
+                  DropdownMenuItem(value: 'done', child: Text('Bought / done')),
+                  DropdownMenuItem(value: 'dropped', child: Text('Dropped')),
+                ],
+                onChanged: (v) => setState(() => _ideaStatus = v ?? 'want'),
+              ),
+            ),
+          ],
+          if (_purchase.contains(_type)) ...[
+            _dateField('Return by (optional)', _returnBy, (d) => _returnBy = d),
+            _dateField('Warranty until (optional)', _warrantyUntil, (d) => _warrantyUntil = d),
+          ],
           if (_type == 'deposit') ...[
             _field('checkNumber', 'Check #'),
             _field('bankAccount', 'Deposited to', hint: 'e.g. Chase checking'),
@@ -276,6 +374,7 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
                   onChanged: (v) => setState(() => _status = v ?? 'to_submit'),
                 ),
               ),
+              _field('owedAmount', 'Amount owed to me', hint: 'Blank = full amount', keyboard: const TextInputType.numberWithOptions(decimal: true)),
               if (_status == 'partial' || _status == 'reimbursed')
                 _field('reimbursedAmount', 'Amount reimbursed', keyboard: const TextInputType.numberWithOptions(decimal: true)),
             ],

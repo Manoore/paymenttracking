@@ -8,7 +8,7 @@ import { AttachmentPanel } from "@/components/Attachments";
 import { CaptureForm } from "@/components/CaptureForm";
 import { ErrorNote, PageHeader, Section, Spinner, StatusBadge, TypeBadge, TypeIcon } from "@/components/ui";
 import { api } from "@/lib/api";
-import { formatDate, formatMoney, STATUS_LABELS, TYPE_LABELS, todayInput } from "@/lib/format";
+import { DOC_KIND_LABELS, formatDate, formatMoney, STATUS_LABELS, TYPE_LABELS, todayInput } from "@/lib/format";
 import { useApi, useDebounced } from "@/lib/hooks";
 import type { Capture, CaptureDetail, CaptureSummary, Paged, ReimbursementStatus } from "@/lib/types";
 
@@ -88,9 +88,9 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
   };
 
   const remove = async () => {
-    if (!confirm("Move this record to trash?")) return;
     await api.del(`/captures/${c._id}`);
-    router.push("/activity");
+    // No confirm dialog: the next page offers Undo, and Trash keeps it.
+    router.push(`/activity?deleted=${c._id}&title=${encodeURIComponent(c.title)}`);
   };
 
   const setLinks = (links: { captureId: string; relation: string }[]) => patch({ links });
@@ -147,7 +147,7 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
                   reimbursement: {
                     status: s,
                     ...(s === "submitted" ? { submittedAt: todayInput() } : {}),
-                    ...(s === "reimbursed" ? { reimbursedAt: todayInput(), amountReimbursedMinor: c.amountMinor ?? 0 } : {}),
+                    ...(s === "reimbursed" ? { reimbursedAt: todayInput(), amountReimbursedMinor: r.amountOwedMinor ?? c.amountMinor ?? 0 } : {}),
                   },
                 },
               });
@@ -204,7 +204,40 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
 
         <aside>
           <dl className="card grid gap-4 p-4 text-sm">
+            {c.type === "document" && (
+              <>
+                <Detail label="Kind" value={c.document?.kind && DOC_KIND_LABELS[c.document.kind]} />
+                <Detail label="Expires" value={formatDate(c.document?.expiresAt)} />
+                <Detail label="Reference" value={c.document?.reference} />
+              </>
+            )}
+            {c.type === "place" && (
+              <>
+                <Detail label="Address" value={c.place?.address} />
+                <Detail
+                  label="Map"
+                  value={
+                    (c.place?.mapUrl || c.place?.address) && (
+                      <a
+                        className="inline-flex items-center gap-1 text-accent"
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        href={c.place?.mapUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.place?.address ?? "")}`}
+                      >
+                        Open in Maps <ExternalLink size={14} />
+                      </a>
+                    )
+                  }
+                />
+                <Detail label="Visited" value={c.place?.visited ? `Yes${c.place.rating ? " · " + "★".repeat(c.place.rating) : ""}` : "Not yet"} />
+              </>
+            )}
+            {c.type === "idea" && (
+              <Detail label="Status" value={{ want: "Want / open", done: "Bought / done", dropped: "Dropped" }[c.idea?.status ?? "want"]} />
+            )}
             <Detail label="Date" value={formatDate(c.occurredAt)} />
+            <Detail label="Return by" value={formatDate(c.returnBy)} />
+            <Detail label="Warranty until" value={formatDate(c.warrantyUntil)} />
             <Detail label={c.type === "deposit" ? "Payer" : c.type === "expense" ? "Merchant" : "Paid to"} value={c.counterparty} />
             <Detail label="Category" value={c.category} />
             <Detail label="Property" value={c.property} />
@@ -230,6 +263,7 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
               <>
                 <Detail label="Reimbursement" value={r.status && <StatusBadge status={r.status} />} />
                 <Detail label="Submitted" value={formatDate(r.submittedAt)} />
+                <Detail label="Amount owed" value={r.amountOwedMinor != null ? formatMoney(r.amountOwedMinor, c.currency) : undefined} />
                 <Detail label="Amount reimbursed" value={r.amountReimbursedMinor ? formatMoney(r.amountReimbursedMinor, c.currency) : undefined} />
                 <Detail label="Reimbursed on" value={formatDate(r.reimbursedAt)} />
               </>

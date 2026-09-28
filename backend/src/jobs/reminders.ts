@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { formatMinor } from "../lib/csv.js";
 import { addDays, startOfUtcDay } from "../lib/recurrence.js";
+import { Capture } from "../models/Capture.js";
 import { Membership, User } from "../models/identity.js";
 import { Notification, RecurringSchedule } from "../models/RecurringSchedule.js";
 
@@ -48,5 +49,58 @@ export async function runReminders(now = new Date()) {
     s.lastRemindedFor = s.nextDueDate;
     await s.save();
   }
-  return { checked: candidates.length, created, emailed };
+
+  const dated = await remindDatedCaptures(today, now);
+  return { checked: candidates.length, created: created + dated.created, emailed: emailed + dated.emailed };
+}
+
+const DATED = [
+  { kind: "expiring", path: "document.expiresAt", defaultDays: 30, verb: "expires" },
+  { kind: "return", path: "returnBy", defaultDays: 3, verb: "last day to return is" },
+  { kind: "warranty", path: "warrantyUntil", defaultDays: 14, verb: "warranty ends" },
+] as const;
+
+function getPath(obj: Record<string, unknown>, path: string): Date | undefined {
+  return path.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], obj) as Date | undefined;
+}
+
+/** Document expiries, return windows and warranty end dates, each notified once. */
+async function remindDatedCaptures(today: Date, now: Date) {
+  let created = 0;
+  let emailed = 0;
+  for (const rule of DATED) {
+    // Look far enough ahead for the largest custom reminder window (120 days).
+    const items = await Capture.find({
+      deletedAt: { $exists: false },
+      [rule.path]: { $gte: addDays(today, -1), $lte: addDays(today, 120) },
+    }).select("+remindedFor");
+    for (const c of items) {
+      const date = getPath(c.toObject() as Record<string, unknown>, rule.path);
+      if (!date) continue;
+      const windowStart = addDays(date, -(c.reminderDaysBefore ?? rule.defaultDays));
+      if (windowStart > now) continue;
+      const key = `${rule.kind}:${date.toISOString().slice(0, 10)}`;
+      if (c.remindedFor?.includes(key)) continue;
+
+      const day = date.toISOString().slice(0, 10);
+      const title = `${c.title}: ${rule.verb} ${day}`;
+      // Private items only notify their creator.
+      const recipients =
+        c.visibility === "private"
+          ? [{ userId: c.createdBy }]
+          : await Membership.find({ workspaceId: c.workspaceId, role: { $in: ["owner", "editor"] } }).lean();
+      for (const m of recipients) {
+        await Notification.create({ workspaceId: c.workspaceId, userId: m.userId, kind: rule.kind, title, captureId: c._id });
+        created++;
+        const user = await User.findById(m.userId).lean();
+        const to = user?.preferences?.reminderEmail || user?.email;
+        if (user?.preferences?.emailReminders !== false && to && (await sendEmail(to, title, `${title}
+
+Open: ${config.WEB_APP_URL}/captures/${c._id}`)))
+          emailed++;
+      }
+      await Capture.updateOne({ _id: c._id }, { $addToSet: { remindedFor: key } });
+    }
+  }
+  return { created, emailed };
 }

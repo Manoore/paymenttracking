@@ -58,7 +58,29 @@ export const TYPE_LABELS: Record<CaptureType, string> = {
   payment: "Payment",
   expense: "Expense",
   deposit: "Check deposit",
+  document: "Document",
+  place: "Place",
+  idea: "Idea",
 };
+
+export const DOC_KIND_LABELS = {
+  warranty: "Warranty",
+  insurance: "Insurance policy",
+  passport: "Passport",
+  license: "Driver's license",
+  registration: "Vehicle registration",
+  lease: "Lease",
+  contract: "Contract",
+  id: "ID card",
+  other: "Other",
+} as const;
+
+/** Rough monthly cost of a schedule, for the subscriptions total. */
+export function monthlyEquivalent(amountMinor: number | undefined, f: { unit: string; interval: number }) {
+  if (!amountMinor) return 0;
+  const perYear = f.unit === "week" ? 52 / f.interval : f.unit === "month" ? 12 / f.interval : 1 / f.interval;
+  return Math.round((amountMinor * perYear) / 12);
+}
 
 export const STATUS_LABELS: Record<ReimbursementStatus, string> = {
   to_submit: "To submit",

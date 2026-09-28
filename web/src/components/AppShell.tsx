@@ -12,6 +12,8 @@ import {
   Repeat,
   Search,
   UserRound,
+  Building2,
+  MapPin,
 } from "lucide-react";
 import { logout } from "@/lib/api";
 import { ThemeSwitcher } from "./ThemeSwitcher";
@@ -22,6 +24,8 @@ const NAV = [
   { href: "/activity", label: "Activity", icon: Search },
   { href: "/recurring", label: "Recurring", icon: Repeat },
   { href: "/reimbursements", label: "Reimbursements", icon: HandCoins },
+  { href: "/properties", label: "Properties", icon: Building2 },
+  { href: "/activity?type=place,idea", label: "Places & ideas", icon: MapPin },
   { href: "/reports", label: "Reports", icon: BarChart3 },
 ];
 
@@ -29,7 +33,9 @@ const NAV = [
 const MOBILE_NAV = [NAV[0], NAV[2], NAV[3], NAV[4]];
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const path = href.split("?")[0];
+  if (href.includes("?")) return false; // filtered shortcuts never "own" a page
+  return path === "/" ? pathname === "/" : pathname.startsWith(path);
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

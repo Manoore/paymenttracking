@@ -7,6 +7,7 @@ import { ctx, requireWrite, scope } from "../middleware/auth.js";
 import { Attachment } from "../models/Attachment.js";
 import { Capture, type CaptureDoc } from "../models/Capture.js";
 import { Workspace } from "../models/identity.js";
+import { storageFor } from "../storage/index.js";
 import { withUrl } from "./attachments.js";
 
 export const capturesRouter = Router();
@@ -18,7 +19,7 @@ const SORTS = {
   created: { createdAt: -1 },
 } as const;
 
-const SUBDOCS = ["payment", "expense", "deposit"] as const;
+const SUBDOCS = ["payment", "expense", "deposit", "document", "place", "idea"] as const;
 
 /** Flatten nested sub-document patches to dotted paths so PATCH merges instead of replacing. */
 function toPathUpdates(body: Record<string, unknown>) {
@@ -66,6 +67,39 @@ async function linkAttachments(captureId: Types.ObjectId, ids: unknown[] | undef
   if (ids?.length) await Attachment.updateMany({ _id: { $in: ids } }, { captureId });
 }
 
+function editDistance(a: string, b: string) {
+  const dp = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
+}
+
+/** Closest known name (payee, property, org, category, tag) to a misspelled query, e.g. "costko" → "Costco". */
+async function suggestSpelling(req: Request, q: string) {
+  const fields = ["counterparty", "property", "organization", "category", "trip", "tags"];
+  const values = (await Promise.all(fields.map((f) => Capture.distinct(f, scope(req))))).flat();
+  const query = q.toLowerCase();
+  let best: { v: string; d: number } | undefined;
+  for (const v of values) {
+    if (typeof v !== "string" || !v) continue;
+    // Compare against the whole value and each word ("oak grve" vs "Oak Grove HOA").
+    const candidates = [v.toLowerCase(), ...v.toLowerCase().split(/s+/)];
+    for (const c of candidates) {
+      const d = editDistance(query, c.slice(0, query.length + 2));
+      const limit = query.length <= 4 ? 1 : 2;
+      if (d <= limit && (!best || d < best.d)) best = { v, d };
+    }
+  }
+  return best?.v;
+}
+
 export async function loadCapture(req: Request, id: string) {
   if (!objectId.safeParse(id).success) throw notFound("Record");
   const doc = await Capture.findOne({ $and: [scope(req), { _id: id }] });
@@ -81,7 +115,68 @@ capturesRouter.get("/", async (req, res) => {
     Capture.find(filter).sort(SORTS[sort]).skip((page - 1) * limit).limit(limit).lean(),
     Capture.countDocuments(filter),
   ]);
-  res.json({ items, total, page, limit });
+  let didYouMean: string | undefined;
+  if (!total && filters.q && filters.q.length >= 3) didYouMean = await suggestSpelling(req, filters.q);
+  res.json({ items, total, page, limit, didYouMean });
+});
+
+/**
+ * Quick templates: the combinations you record most (e.g. "HOA payment to Oak
+ * Grove HOA, property Oak Grove"), so repeat entries are one tap.
+ */
+capturesRouter.get("/templates", async (req, res) => {
+  const rows = await Capture.aggregate([
+    { $match: { $and: [scope(req), { type: { $in: ["payment", "expense", "deposit"] }, counterparty: { $nin: [null, ""] } }] } },
+    { $sort: { occurredAt: -1, createdAt: -1 } },
+    { $limit: 500 },
+    {
+      $group: {
+        _id: {
+          type: "$type",
+          counterparty: { $toLower: "$counterparty" },
+          organization: { $toLower: { $ifNull: ["$organization", ""] } },
+          property: { $toLower: { $ifNull: ["$property", ""] } },
+        },
+        count: { $sum: 1 },
+        last: { $first: "$$ROOT" },
+      },
+    },
+    { $sort: { count: -1, "last.occurredAt": -1 } },
+    { $limit: 8 },
+  ]);
+  res.json({
+    items: rows.map(({ count, last }) => ({
+      count,
+      label: `${last.type === "deposit" ? "From" : last.type === "expense" ? "At" : "To"} ${last.counterparty}`,
+      values: {
+        type: last.type,
+        title: last.title,
+        counterparty: last.counterparty,
+        amountMinor: last.amountMinor,
+        currency: last.currency,
+        category: last.category,
+        property: last.property,
+        trip: last.trip,
+        organization: last.organization,
+        method: last.payment?.method ?? last.expense?.paymentMethod,
+        reimbursable: last.expense?.reimbursable ?? false,
+      },
+    })),
+  });
+});
+
+/** Recently deleted records (soft-deleted), newest first. */
+capturesRouter.get("/trash", async (req, res) => {
+  const { workspaceId, userId } = ctx(req);
+  const items = await Capture.find({
+    workspaceId,
+    deletedAt: { $exists: true },
+    $or: [{ visibility: "workspace" }, { createdBy: userId }],
+  })
+    .sort({ deletedAt: -1 })
+    .limit(200)
+    .lean();
+  res.json({ items });
 });
 
 capturesRouter.post("/", requireWrite, async (req, res) => {
@@ -140,6 +235,24 @@ capturesRouter.delete("/:id", requireWrite, async (req, res) => {
   const doc = await loadCapture(req, String(req.params.id));
   doc.deletedAt = new Date();
   await doc.save();
+  res.status(204).end();
+});
+
+capturesRouter.delete("/:id/permanent", requireWrite, async (req, res) => {
+  const { workspaceId, userId } = ctx(req);
+  const doc = await Capture.findOne({
+    _id: String(req.params.id),
+    workspaceId,
+    deletedAt: { $exists: true },
+    $or: [{ visibility: "workspace" }, { createdBy: userId }],
+  });
+  if (!doc) throw notFound("Deleted record");
+  const atts = await Attachment.find({ captureId: doc._id });
+  for (const a of atts) {
+    await storageFor(a.storage!.driver).remove(a.storage!.key).catch(() => undefined);
+  }
+  await Attachment.deleteMany({ captureId: doc._id });
+  await doc.deleteOne();
   res.status(204).end();
 });
 

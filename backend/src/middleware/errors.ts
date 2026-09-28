@@ -24,5 +24,6 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return res.status(400).json({ error: { code: "bad_id", message: `Invalid ${err.path}` } });
   }
   req.log?.error({ err }, "Unhandled error");
+  if (process.env.DEBUG_ERRORS) console.error(err);
   res.status(500).json({ error: { code: "internal", message: "Something went wrong" } });
 }

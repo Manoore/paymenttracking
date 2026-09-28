@@ -1,4 +1,5 @@
-export type CaptureType = "note" | "link" | "payment" | "expense" | "deposit";
+export type CaptureType = "note" | "link" | "payment" | "expense" | "deposit" | "document" | "place" | "idea";
+export type DocumentKind = "warranty" | "insurance" | "passport" | "license" | "registration" | "lease" | "contract" | "id" | "other";
 export type ReimbursementStatus = "to_submit" | "submitted" | "partial" | "reimbursed";
 
 export interface Attachment {
@@ -14,6 +15,7 @@ export interface Reimbursement {
   organization?: string;
   status?: ReimbursementStatus;
   submittedAt?: string;
+  amountOwedMinor?: number;
   amountReimbursedMinor?: number;
   reimbursedAt?: string;
   notes?: string;
@@ -37,6 +39,12 @@ export interface Capture {
   property?: string;
   trip?: string;
   organization?: string;
+  returnBy?: string;
+  warrantyUntil?: string;
+  reminderDaysBefore?: number;
+  document?: { kind?: DocumentKind; reference?: string; expiresAt?: string };
+  place?: { kind?: "restaurant" | "stay" | "sight" | "shop" | "other"; address?: string; mapUrl?: string; visited?: boolean; rating?: number };
+  idea?: { kind?: "product" | "design" | "gift" | "other"; status?: "want" | "done" | "dropped" };
   payment?: { method?: string; confirmationNumber?: string; scheduleId?: string; dueDate?: string };
   expense?: { project?: string; paymentMethod?: string; reimbursable?: boolean; reimbursement?: Reimbursement };
   deposit?: { checkNumber?: string; bankAccount?: string; cleared?: boolean; clearedAt?: string };
@@ -84,6 +92,13 @@ export interface Paged<T> {
   total: number;
   page: number;
   limit: number;
+  didYouMean?: string;
+}
+
+export interface Template {
+  count: number;
+  label: string;
+  values: Partial<Capture> & { method?: string; reimbursable?: boolean };
 }
 
 export interface Workspace {
@@ -114,4 +129,6 @@ export interface Dashboard {
   reimbursementsOwed: { organization: string; currency: string; count: number; outstandingMinor: number }[];
   unclearedDeposits: Capture[];
   unreadNotifications: number;
+  expiring: { kind: "expires" | "return" | "warranty"; date: string; id: string; title: string; type: CaptureType }[];
+  setup: { captures: number; schedules: number; withProof: number };
 }

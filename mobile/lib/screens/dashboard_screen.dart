@@ -68,6 +68,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     reload();
                   },
                 ),
+              if (d.expiring.isNotEmpty) ...[
+                const SectionTitle('Coming up'),
+                for (final e in d.expiring)
+                  ListTile(
+                    leading: Icon(
+                      {'expires': Icons.badge_outlined, 'return': Icons.assignment_return_outlined, 'warranty': Icons.verified_user_outlined}[e['kind']],
+                      color: daysUntil(DateTime.parse(e['date'] as String)) <= 7 ? scheme.tertiary : scheme.outline,
+                    ),
+                    title: Text(e['title'] as String),
+                    subtitle: Text(
+                      '${{'expires': 'Expires', 'return': 'Return by', 'warranty': 'Warranty ends'}[e['kind']]} ${formatDate(DateTime.parse(e['date'] as String))}',
+                    ),
+                    onTap: () async {
+                      await context.push('/captures/${e['id']}');
+                      reload();
+                    },
+                  ),
+              ],
               const SectionTitle('Owed to you'),
               if (d.owed.isEmpty) const EmptyNote('No reimbursements pending.'),
               for (final g in d.owed)

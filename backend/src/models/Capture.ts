@@ -7,7 +7,7 @@ import { Schema, model, type InferSchemaType, type Types } from "mongoose";
  * (payment, expense, deposit, ...). Future modules (place, product, design)
  * add a new sub-document and a new `type` value; nothing else changes.
  */
-export const CAPTURE_TYPES = ["note", "link", "payment", "expense", "deposit"] as const;
+export const CAPTURE_TYPES = ["note", "link", "payment", "expense", "deposit", "document", "place", "idea"] as const;
 export type CaptureType = (typeof CAPTURE_TYPES)[number];
 
 export const REIMBURSEMENT_STATUSES = ["to_submit", "submitted", "partial", "reimbursed"] as const;
@@ -27,6 +27,8 @@ const reimbursementSchema = new Schema(
     organization: String,
     status: { type: String, enum: REIMBURSEMENT_STATUSES, default: "to_submit" },
     submittedAt: Date,
+    // What you're owed back; defaults to the full amount. Lower it for splits ("Ravi owes $30 of $90").
+    amountOwedMinor: Number,
     amountReimbursedMinor: { type: Number, default: 0 },
     reimbursedAt: Date,
     notes: String,
@@ -50,6 +52,40 @@ const depositSchema = new Schema(
     bankAccount: String,
     cleared: { type: Boolean, default: false },
     clearedAt: Date,
+  },
+  { _id: false },
+);
+
+export const DOCUMENT_KINDS = ["warranty", "insurance", "passport", "license", "registration", "lease", "contract", "id", "other"] as const;
+
+/** Important papers with an expiry/renewal date (passport, insurance policy, lease…). */
+const documentSchema = new Schema(
+  {
+    kind: { type: String, enum: DOCUMENT_KINDS, default: "other" },
+    // Store only a reference like the last 4 digits, never full ID numbers.
+    reference: String,
+    expiresAt: Date,
+  },
+  { _id: false },
+);
+
+/** Travel spots, restaurants and other places worth remembering. */
+const placeSchema = new Schema(
+  {
+    kind: { type: String, enum: ["restaurant", "stay", "sight", "shop", "other"], default: "other" },
+    address: String,
+    mapUrl: String,
+    visited: { type: Boolean, default: false },
+    rating: { type: Number, min: 1, max: 5 },
+  },
+  { _id: false },
+);
+
+/** Products to buy, design inspiration and other ideas. */
+const ideaSchema = new Schema(
+  {
+    kind: { type: String, enum: ["product", "design", "gift", "other"], default: "other" },
+    status: { type: String, enum: ["want", "done", "dropped"], default: "want" },
   },
   { _id: false },
 );
@@ -91,9 +127,19 @@ const captureSchema = new Schema(
     // reimbursable expenses it is also who pays you back.
     organization: String,
 
+    // Purchase follow-ups (any type): reminders fire before these dates.
+    returnBy: Date,
+    warrantyUntil: Date,
+    reminderDaysBefore: { type: Number, min: 0, max: 120 },
+    // Keys like "return:2026-10-01" so each deadline notifies once.
+    remindedFor: { type: [String], default: undefined, select: false },
+
     payment: paymentSchema,
     expense: expenseSchema,
     deposit: depositSchema,
+    document: documentSchema,
+    place: placeSchema,
+    idea: ideaSchema,
 
     attachmentIds: [{ type: Schema.Types.ObjectId, ref: "Attachment" }],
     links: { type: [linkSchema], default: [] },
@@ -110,6 +156,9 @@ captureSchema.index({ workspaceId: 1, filed: 1 });
 captureSchema.index({ workspaceId: 1, "expense.reimbursable": 1, "expense.reimbursement.status": 1 });
 captureSchema.index({ workspaceId: 1, tags: 1 });
 captureSchema.index({ workspaceId: 1, organization: 1 });
+captureSchema.index({ workspaceId: 1, "document.expiresAt": 1 });
+captureSchema.index({ workspaceId: 1, returnBy: 1 });
+captureSchema.index({ workspaceId: 1, warrantyUntil: 1 });
 captureSchema.index(
   {
     title: "text",

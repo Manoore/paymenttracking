@@ -159,6 +159,63 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: (u: User) => void
   );
 }
 
+/** Private calendar subscription URL for bills, expiries and deadlines. */
+function CalendarFeed() {
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const load = async (rotate = false) => {
+    if (rotate && !confirm("Create a new link? The old link stops working in any calendar that uses it.")) return;
+    setBusy(true);
+    try {
+      const r = await api.post<{ url: string }>(`/calendar/feed${rotate ? "?rotate=1" : ""}`);
+      setUrl(r.url);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title="Calendar">
+      <div className="card space-y-3 p-4">
+        <p className="text-sm text-muted">
+          Add bill due dates, document expiries, return deadlines and warranty end dates to Google, Apple or Outlook Calendar.
+          The link is private: anyone who has it can see these dates, so don&apos;t share it.
+        </p>
+        {url ? (
+          <>
+            <div className="flex gap-2">
+              <input className="input font-mono text-xs" readOnly value={url} onFocus={(e) => e.target.select()} aria-label="Calendar link" />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(url).then(() => setCopied(true));
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
+              <li>Google Calendar: Other calendars → + → From URL → paste.</li>
+              <li>iPhone: Settings → Calendar → Accounts → Add Subscribed Calendar → paste.</li>
+              <li>Outlook: Add calendar → Subscribe from web → paste.</li>
+            </ul>
+            <button type="button" className="btn-ghost text-sm" disabled={busy} onClick={() => void load(true)}>
+              Reset link
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn-secondary" disabled={busy} onClick={() => void load()}>
+            {busy && <Loader2 size={16} className="animate-spin" />} Get my calendar link
+          </button>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 function PasswordForm() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -243,6 +300,7 @@ export default function ProfilePage() {
         </div>
       </Section>
       <ProfileForm user={data.user} onSaved={(u) => setData({ user: u })} />
+      <CalendarFeed />
       <PasswordForm />
     </>
   );

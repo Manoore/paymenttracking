@@ -17,6 +17,9 @@ const ORG = { $ifNull: ["$organization", "$expense.reimbursement.organization"] 
  * Group text values case- and space-insensitively ("India Club" == "india club ")
  * while displaying the first spelling seen.
  */
+// Amount you're owed back: the split amount if set, otherwise the whole expense.
+const OWED = { $ifNull: ["$expense.reimbursement.amountOwedMinor", { $ifNull: ["$amountMinor", 0] }] };
+
 const ciKey = (expr: unknown) => ({ $toLower: { $trim: { input: { $ifNull: [expr, ""] } } } });
 const label = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback);
 
@@ -26,7 +29,7 @@ insightsRouter.get("/dashboard", async (req, res) => {
   const horizon = addDays(today, Number(req.query.days ?? 14));
   const base = scope(req);
 
-  const [overdue, upcoming, recent, inboxCount, owed, uncleared, unread] = await Promise.all([
+  const [overdue, upcoming, recent, inboxCount, owed, uncleared, unread, expiring, setup] = await Promise.all([
     RecurringSchedule.find({ workspaceId, active: true, nextDueDate: { $lt: today } }).sort({ nextDueDate: 1 }).lean(),
     RecurringSchedule.find({ workspaceId, active: true, nextDueDate: { $gte: today, $lte: horizon } })
       .sort({ nextDueDate: 1 })
@@ -41,7 +44,7 @@ insightsRouter.get("/dashboard", async (req, res) => {
           organization: { $first: ORG },
           count: { $sum: 1 },
           outstandingMinor: {
-            $sum: { $subtract: [{ $ifNull: ["$amountMinor", 0] }, { $ifNull: ["$expense.reimbursement.amountReimbursedMinor", 0] }] },
+            $sum: { $subtract: [OWED, { $ifNull: ["$expense.reimbursement.amountReimbursedMinor", 0] }] },
           },
         },
       },
@@ -49,7 +52,38 @@ insightsRouter.get("/dashboard", async (req, res) => {
     ]),
     Capture.find({ $and: [base, { type: "deposit", "deposit.cleared": { $ne: true } }] }).sort({ occurredAt: -1 }).limit(10).lean(),
     Notification.countDocuments({ userId, workspaceId, readAt: { $exists: false } }),
+    // Papers expiring, return windows closing, warranties ending.
+    Capture.find({
+      $and: [
+        base,
+        {
+          $or: [
+            { "document.expiresAt": { $gte: addDays(today, -30), $lte: addDays(today, 60) } },
+            { returnBy: { $gte: addDays(today, -3), $lte: addDays(today, 14) } },
+            { warrantyUntil: { $gte: addDays(today, -7), $lte: addDays(today, 30) } },
+          ],
+        },
+      ],
+    })
+      .limit(20)
+      .lean(),
+    Promise.all([
+      Capture.countDocuments(base),
+      RecurringSchedule.countDocuments({ workspaceId }),
+      Capture.countDocuments({ $and: [base, { "attachmentIds.0": { $exists: true } }] }),
+    ]),
   ]);
+
+  const expiringItems = expiring
+    .flatMap((c) => [
+      c.document?.expiresAt && { kind: "expires", date: c.document.expiresAt, capture: c },
+      c.returnBy && { kind: "return", date: c.returnBy, capture: c },
+      c.warrantyUntil && { kind: "warranty", date: c.warrantyUntil, capture: c },
+    ])
+    .filter((x): x is { kind: string; date: Date; capture: (typeof expiring)[number] } => Boolean(x))
+    .filter((x) => x.date >= addDays(today, -30) && x.date <= addDays(today, 60))
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .map((x) => ({ kind: x.kind, date: x.date, id: x.capture._id, title: x.capture.title, type: x.capture.type }));
 
   res.json({
     overdue,
@@ -59,6 +93,8 @@ insightsRouter.get("/dashboard", async (req, res) => {
     reimbursementsOwed: owed.map((g) => ({ organization: label(g.organization, "Unassigned"), currency: g._id.currency, count: g.count, outstandingMinor: g.outstandingMinor })),
     unclearedDeposits: uncleared,
     unreadNotifications: unread,
+    expiring: expiringItems,
+    setup: { captures: setup[0], schedules: setup[1], withProof: setup[2] },
   });
 });
 
@@ -84,7 +120,7 @@ insightsRouter.get("/reimbursements", async (req, res) => {
       $group: {
         _id: { key: ciKey(groupFields[groupBy]), currency: "$currency" },
         label: { $first: groupFields[groupBy] },
-        totalMinor: { $sum: { $ifNull: ["$amountMinor", 0] } },
+        totalMinor: { $sum: OWED },
         reimbursedMinor: { $sum: { $ifNull: ["$expense.reimbursement.amountReimbursedMinor", 0] } },
         items: {
           $push: {
@@ -92,6 +128,7 @@ insightsRouter.get("/reimbursements", async (req, res) => {
             title: "$title",
             counterparty: "$counterparty",
             amountMinor: "$amountMinor",
+            owedMinor: OWED,
             occurredAt: "$occurredAt",
             trip: "$trip",
             organization: ORG,
@@ -221,4 +258,40 @@ insightsRouter.post("/notifications/:id/read", async (req, res) => {
   const r = await Notification.updateOne({ _id: String(req.params.id), userId }, { readAt: new Date() });
   if (!r.matchedCount) throw notFound("Notification");
   res.status(204).end();
+});
+
+/** Every property you've recorded, with totals, for the Properties page. */
+insightsRouter.get("/properties", async (req, res) => {
+  const { workspaceId } = ctx(req);
+  const [rows, schedules] = await Promise.all([
+    Capture.aggregate([
+      { $match: { $and: [scope(req), { property: { $nin: [null, ""] } }] } },
+      {
+        $group: {
+          _id: { key: ciKey("$property"), currency: "$currency" },
+          name: { $first: "$property" },
+          count: { $sum: 1 },
+          totalMinor: { $sum: { $cond: [{ $in: ["$type", ["payment", "expense"]] }, { $ifNull: ["$amountMinor", 0] }, 0] } },
+          lastAt: { $max: { $ifNull: ["$occurredAt", "$createdAt"] } },
+        },
+      },
+      { $sort: { lastAt: -1 } },
+    ]),
+    RecurringSchedule.find({ workspaceId, active: true, property: { $nin: [null, ""] } }).lean(),
+  ]);
+  const byKey = new Map<string, { name: string; count: number; lastAt: Date; totals: { currency: string; totalMinor: number }[]; schedules: number }>();
+  for (const r of rows) {
+    const cur = byKey.get(r._id.key) ?? { name: label(r.name, "(none)"), count: 0, lastAt: r.lastAt as Date, totals: [] as { currency: string; totalMinor: number }[], schedules: 0 };
+    cur.count += r.count;
+    cur.totals.push({ currency: r._id.currency, totalMinor: r.totalMinor });
+    if (r.lastAt > cur.lastAt) cur.lastAt = r.lastAt;
+    byKey.set(r._id.key, cur);
+  }
+  for (const s of schedules) {
+    const key = s.property!.trim().toLowerCase();
+    const cur = byKey.get(key) ?? { name: s.property!, count: 0, lastAt: s.createdAt as Date, totals: [] as { currency: string; totalMinor: number }[], schedules: 0 };
+    cur.schedules++;
+    byKey.set(key, cur);
+  }
+  res.json({ items: [...byKey.values()] });
 });

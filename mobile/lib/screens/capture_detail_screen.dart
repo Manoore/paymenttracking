@@ -64,7 +64,20 @@ class _CaptureDetailScreenState extends State<CaptureDetailScreen> {
         const next = {'to_submit': 'submitted', 'submitted': 'reimbursed', 'partial': 'reimbursed'};
         final nextStatus = c.reimbursable && r != null ? next[r.status] : null;
         final details = <(String, String?)>[
+          if (c.type == 'document') ...[
+            ('Kind', docKindLabels[c.docKind]),
+            ('Expires', formatDate(c.expiresAt)),
+            ('Reference', c.docReference),
+          ],
+          if (c.type == 'place') ...[
+            ('Address', c.address),
+            ('Map', c.mapUrl),
+            ('Visited', c.visited ? 'Yes${c.rating != null ? ' · ${'★' * c.rating!}' : ''}' : 'Not yet'),
+          ],
+          if (c.type == 'idea') ('Status', {'want': 'Want / open', 'done': 'Bought / done', 'dropped': 'Dropped'}[c.ideaStatus ?? 'want']),
           ('Date', formatDate(c.occurredAt)),
+          ('Return by', formatDate(c.returnBy)),
+          ('Warranty until', formatDate(c.warrantyUntil)),
           (c.type == 'deposit' ? 'Payer' : c.type == 'expense' ? 'Merchant' : 'Paid to', c.counterparty),
           ('Category', c.category),
           ('Property', c.property),

@@ -14,6 +14,8 @@ const userSchema = new Schema(
       reminderEmail: { type: String, trim: true, lowercase: true },
     },
     passwordChangedAt: Date,
+    // Secret for the read-only calendar feed URL; regenerate to revoke.
+    calendarToken: { type: String, index: { unique: true, sparse: true }, select: false },
   },
   { timestamps: true },
 );

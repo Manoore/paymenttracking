@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Empty, ErrorNote, PageHeader, Spinner } from "@/components/ui";
-import { daysUntil, formatDate, formatMoney, frequencyLabel, relativeDue } from "@/lib/format";
+import { daysUntil, formatDate, formatMoney, frequencyLabel, monthlyEquivalent, relativeDue } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Schedule } from "@/lib/types";
 
@@ -27,6 +27,27 @@ export default function RecurringPage() {
         <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Show stopped schedules
       </label>
       {error && <ErrorNote message={error} />}
+      {(() => {
+        // Subscriptions view: what all active schedules cost per month / year.
+        const perCurrency = new Map<string, number>();
+        for (const s of data?.items ?? [])
+          if (s.active) perCurrency.set(s.currency, (perCurrency.get(s.currency) ?? 0) + monthlyEquivalent(s.amountMinor, s.frequency));
+        if (!perCurrency.size) return null;
+        return (
+          <div className="mb-4 flex flex-wrap gap-3">
+            {[...perCurrency.entries()].map(([cur, monthly]) => (
+              <div key={cur} className="card px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-muted">Recurring cost ({cur})</p>
+                <p className="text-xl font-semibold tabular-nums">
+                  {formatMoney(monthly, cur)}
+                  <span className="text-sm font-normal text-muted"> / month</span>
+                </p>
+                <p className="text-sm text-muted tabular-nums">{formatMoney(monthly * 12, cur)} / year</p>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       {loading && !data ? (
         <Spinner />
       ) : data?.items.length ? (

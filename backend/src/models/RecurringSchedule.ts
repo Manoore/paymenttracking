@@ -33,10 +33,11 @@ const notificationSchema = new Schema(
   {
     workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    kind: { type: String, enum: ["due_soon", "overdue"], required: true },
+    kind: { type: String, enum: ["due_soon", "overdue", "expiring", "return", "warranty"], required: true },
     title: { type: String, required: true },
     body: String,
     scheduleId: { type: Schema.Types.ObjectId, ref: "RecurringSchedule" },
+    captureId: { type: Schema.Types.ObjectId, ref: "Capture" },
     readAt: Date,
   },
   { timestamps: true },

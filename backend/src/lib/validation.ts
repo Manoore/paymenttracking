@@ -1,6 +1,6 @@
 import { Types } from "mongoose";
 import { z } from "zod";
-import { CAPTURE_TYPES, REIMBURSEMENT_STATUSES } from "../models/Capture.js";
+import { CAPTURE_TYPES, DOCUMENT_KINDS, REIMBURSEMENT_STATUSES } from "../models/Capture.js";
 
 export const objectId = z.string().refine((v) => Types.ObjectId.isValid(v), "Invalid id");
 export const currency = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, "Use a 3-letter currency code");
@@ -13,6 +13,7 @@ export const reimbursementInput = z.object({
   organization: optText(200),
   status: z.enum(REIMBURSEMENT_STATUSES).optional(),
   submittedAt: z.coerce.date().nullish(),
+  amountOwedMinor: amountMinor.nullish(),
   amountReimbursedMinor: amountMinor.nullish(),
   reimbursedAt: z.coerce.date().nullish(),
   notes: optText(2000),
@@ -35,6 +36,31 @@ export const captureInput = z.object({
   property: optText(200),
   trip: optText(200),
   organization: optText(200),
+  returnBy: z.coerce.date().nullish(),
+  warrantyUntil: z.coerce.date().nullish(),
+  reminderDaysBefore: z.number().int().min(0).max(120).nullish(),
+  document: z
+    .object({
+      kind: z.enum(DOCUMENT_KINDS).optional(),
+      reference: optText(40),
+      expiresAt: z.coerce.date().nullish(),
+    })
+    .nullish(),
+  place: z
+    .object({
+      kind: z.enum(["restaurant", "stay", "sight", "shop", "other"]).optional(),
+      address: optText(500),
+      mapUrl: z.string().trim().url().max(2000).nullish(),
+      visited: z.boolean().optional(),
+      rating: z.number().int().min(1).max(5).nullish(),
+    })
+    .nullish(),
+  idea: z
+    .object({
+      kind: z.enum(["product", "design", "gift", "other"]).optional(),
+      status: z.enum(["want", "done", "dropped"]).optional(),
+    })
+    .nullish(),
   payment: z
     .object({
       method: optText(100),

@@ -64,7 +64,7 @@ export default function ReimbursementsPage() {
                 <div className="flex-1">
                   <h2 className="font-semibold">{g.key}</h2>
                   <p className="text-sm text-muted">
-                    {formatMoney(g.totalMinor, g.currency)} spent · {formatMoney(g.reimbursedMinor, g.currency)} repaid
+                    {formatMoney(g.totalMinor, g.currency)} owed · {formatMoney(g.reimbursedMinor, g.currency)} repaid
                   </p>
                 </div>
                 <div className="text-right">

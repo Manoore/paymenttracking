@@ -3,13 +3,27 @@
 DateTime? _date(dynamic v) => v == null ? null : DateTime.parse(v as String);
 int? _int(dynamic v) => v == null ? null : (v as num).toInt();
 
-const captureTypes = ['payment', 'expense', 'deposit', 'note', 'link'];
+const captureTypes = ['payment', 'expense', 'deposit', 'document', 'place', 'idea', 'note', 'link'];
 const typeLabels = {
   'note': 'Note',
   'link': 'Link',
   'payment': 'Payment',
   'expense': 'Expense',
   'deposit': 'Check deposit',
+  'document': 'Document',
+  'place': 'Place',
+  'idea': 'Idea',
+};
+const docKindLabels = {
+  'warranty': 'Warranty',
+  'insurance': 'Insurance policy',
+  'passport': 'Passport',
+  'license': "Driver's license",
+  'registration': 'Vehicle registration',
+  'lease': 'Lease',
+  'contract': 'Contract',
+  'id': 'ID card',
+  'other': 'Other',
 };
 const statusLabels = {
   'to_submit': 'To submit',
@@ -40,12 +54,14 @@ class Reimbursement {
       : organization = j['organization'] as String?,
         status = (j['status'] as String?) ?? 'to_submit',
         submittedAt = _date(j['submittedAt']),
+        amountOwedMinor = _int(j['amountOwedMinor']),
         amountReimbursedMinor = _int(j['amountReimbursedMinor']),
         reimbursedAt = _date(j['reimbursedAt']);
 
   final String? organization;
   final String status;
   final DateTime? submittedAt;
+  final int? amountOwedMinor;
   final int? amountReimbursedMinor;
   final DateTime? reimbursedAt;
 }
@@ -79,6 +95,16 @@ class Capture {
         checkNumber = j['deposit']?['checkNumber'] as String?,
         bankAccount = j['deposit']?['bankAccount'] as String?,
         cleared = j['deposit']?['cleared'] as bool? ?? false,
+        returnBy = _date(j['returnBy']),
+        warrantyUntil = _date(j['warrantyUntil']),
+        docKind = j['document']?['kind'] as String?,
+        docReference = j['document']?['reference'] as String?,
+        expiresAt = _date(j['document']?['expiresAt']),
+        address = j['place']?['address'] as String?,
+        mapUrl = j['place']?['mapUrl'] as String?,
+        visited = j['place']?['visited'] as bool? ?? false,
+        rating = _int(j['place']?['rating']),
+        ideaStatus = j['idea']?['status'] as String?,
         attachmentCount = ((j['attachmentIds'] as List?) ?? const []).length,
         attachments = ((j['attachments'] as List?) ?? const [])
             .map((a) => Attachment.fromJson((a as Map).cast<String, dynamic>()))
@@ -109,6 +135,16 @@ class Capture {
   final String? checkNumber;
   final String? bankAccount;
   final bool cleared;
+  final DateTime? returnBy;
+  final DateTime? warrantyUntil;
+  final String? docKind;
+  final String? docReference;
+  final DateTime? expiresAt;
+  final String? address;
+  final String? mapUrl;
+  final bool visited;
+  final int? rating;
+  final String? ideaStatus;
   final int attachmentCount;
   final List<Attachment> attachments;
 
@@ -172,6 +208,7 @@ class Dashboard {
         recent = _captures(j['recent']),
         unclearedDeposits = _captures(j['unclearedDeposits']),
         inboxCount = _int(j['inboxCount']) ?? 0,
+        expiring = ((j['expiring'] as List?) ?? const []).cast<Map<String, dynamic>>(),
         owed = ((j['reimbursementsOwed'] as List?) ?? const [])
             .map((g) => OwedGroup.fromJson((g as Map).cast<String, dynamic>()))
             .toList();
@@ -182,6 +219,7 @@ class Dashboard {
   final List<Capture> unclearedDeposits;
   final int inboxCount;
   final List<OwedGroup> owed;
+  final List<Map<String, dynamic>> expiring;
 }
 
 List<Schedule> _schedules(dynamic v) =>

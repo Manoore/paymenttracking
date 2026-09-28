@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, Search, SlidersHorizontal, X } from "lucide-react";
+import Link from "next/link";
+import { Download, RotateCcw, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { STATUS_LABELS, TYPE_LABELS } from "@/lib/format";
 import { useApi, useDebounced, useSuggestions } from "@/lib/hooks";
@@ -30,6 +31,9 @@ export function CaptureBrowser({ fixed = {}, showFilters = true }: { fixed?: Rec
     if (v) current[k] = v;
   }
   const activeCount = Object.keys(current).length;
+  const deletedId = params.get("deleted");
+  const deletedTitle = params.get("title");
+  const [undoState, setUndoState] = useState<"idle" | "busy" | "done">("idle");
 
   const setParam = (k: string, v: string | null) => {
     const next = new URLSearchParams(params.toString());
@@ -69,8 +73,58 @@ export function CaptureBrowser({ fixed = {}, showFilters = true }: { fixed?: Rec
   const pairs = (vals: string[]) => vals.map((v) => [v, v] as [string, string]);
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
+  const QUICK: [string, string | null][] = [
+    ["All", null],
+    ["Money", "payment,expense,deposit"],
+    ["Documents", "document"],
+    ["Places", "place"],
+    ["Ideas", "idea"],
+    ["Notes & links", "note,link"],
+  ];
+
+  async function undoDelete() {
+    if (!deletedId) return;
+    setUndoState("busy");
+    await api.post(`/captures/${deletedId}/restore`).catch(() => null);
+    setUndoState("done");
+    const next = new URLSearchParams(params.toString());
+    next.delete("deleted");
+    next.delete("title");
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  }
+
   return (
     <div>
+      {deletedId && undoState !== "done" && (
+        <div className="card mb-4 flex items-center gap-3 px-4 py-3 text-sm">
+          <Trash2 size={16} className="text-muted" />
+          <span className="min-w-0 flex-1 truncate">
+            Moved {deletedTitle ? <strong>“{deletedTitle}”</strong> : "record"} to trash.
+          </span>
+          <button className="btn-secondary min-h-9 py-1.5" disabled={undoState === "busy"} onClick={() => void undoDelete()}>
+            <RotateCcw size={14} /> Undo
+          </button>
+        </div>
+      )}
+      {showFilters && (
+        <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
+          {QUICK.map(([label, types]) => (
+            <button
+              key={label}
+              onClick={() => setParam("type", types)}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                (current.type ?? null) === types ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-muted hover:text-text"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <Link href="/trash" className="ml-auto shrink-0 rounded-full px-3 py-1.5 text-sm text-muted hover:text-text">
+            <Trash2 size={14} className="mr-1 inline" />
+            Trash
+          </Link>
+        </div>
+      )}
       <div className="mb-4 flex gap-2">
         <div className="relative flex-1">
           <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
@@ -155,7 +209,17 @@ export function CaptureBrowser({ fixed = {}, showFilters = true }: { fixed?: Rec
           )}
         </>
       ) : (
-        <Empty title={q || activeCount ? "No matches" : "Nothing here yet"} body={q ? "Try a different word or clear filters." : undefined} />
+        <Empty
+          title={q || activeCount ? "No matches" : "Nothing here yet"}
+          body={q && !data?.didYouMean ? "Try a different word or clear filters." : undefined}
+          action={
+            data?.didYouMean ? (
+              <button className="btn-secondary" onClick={() => setQ(data.didYouMean!)}>
+                Did you mean “{data.didYouMean}”?
+              </button>
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
 import { attachmentsRouter, filesRouter } from "./routes/attachments.js";
 import { authRouter } from "./routes/auth.js";
+import { calendarRouter } from "./routes/calendar.js";
 import { capturesRouter } from "./routes/captures.js";
 import { insightsRouter } from "./routes/insights.js";
 import { recurringRouter } from "./routes/recurring.js";
@@ -43,6 +44,8 @@ export function createApp() {
   );
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
+
+  app.use(calendarRouter);
 
   const api = Router();
   api.use("/auth", authRouter);

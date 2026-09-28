@@ -6,7 +6,7 @@ import { CaptureForm } from "@/components/CaptureForm";
 import { PageHeader, Spinner } from "@/components/ui";
 import type { CaptureType } from "@/lib/types";
 
-const TYPES = ["note", "link", "payment", "expense", "deposit"];
+const TYPES = ["note", "link", "payment", "expense", "deposit", "document", "place", "idea"];
 
 function NewCapture() {
   const params = useSearchParams();

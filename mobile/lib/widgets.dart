@@ -13,6 +13,9 @@ const typeIcons = {
   'payment': Icons.account_balance_wallet_outlined,
   'expense': Icons.receipt_long_outlined,
   'deposit': Icons.account_balance_outlined,
+  'document': Icons.badge_outlined,
+  'place': Icons.place_outlined,
+  'idea': Icons.lightbulb_outline,
 };
 
 /// Loads data with a Future, shows spinner / error / content, supports pull-to-refresh.

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Link2, Loader2, Paperclip, Receipt, StickyNote, Wallet, Landmark } from "lucide-react";
+import { FileBadge, FileText, Landmark, Lightbulb, Link2, Loader2, MapPin, Paperclip, Receipt, StickyNote, Wallet } from "lucide-react";
 import { formatDate, formatMoney, STATUS_LABELS, TYPE_LABELS } from "@/lib/format";
 import type { Capture, CaptureType, ReimbursementStatus } from "@/lib/types";
 
@@ -57,6 +57,9 @@ const TYPE_ICON: Record<CaptureType, typeof FileText> = {
   payment: Wallet,
   expense: Receipt,
   deposit: Landmark,
+  document: FileBadge,
+  place: MapPin,
+  idea: Lightbulb,
 };
 
 export function TypeIcon({ type, size = 18 }: { type: CaptureType; size?: number }) {
