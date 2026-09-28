@@ -89,6 +89,8 @@ export function ReaderSettings() {
   );
 }
 
+const OTHER = "__other__";
+
 function ReaderForm({
   settings,
   providers,
@@ -104,6 +106,8 @@ function ReaderForm({
   const info = providers.find((p) => p.id === provider)!;
   const sameProvider = provider === settings.provider;
   const [model, setModel] = useState(sameProvider ? (settings.model ?? info.defaultModel) : info.defaultModel);
+  // A saved model that isn't in the curated list shows as "Other…" with its name.
+  const [customModel, setCustomModel] = useState(Boolean(model) && !info.models.includes(model));
   const [baseUrl, setBaseUrl] = useState(settings.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
   const [autoRead, setAutoRead] = useState(settings.autoRead);
@@ -115,7 +119,9 @@ function ReaderForm({
   const changeProvider = (p: ProviderId) => {
     setProvider(p);
     const next = providers.find((x) => x.id === p)!;
-    setModel(p === settings.provider ? (settings.model ?? next.defaultModel) : next.defaultModel);
+    const m = p === settings.provider ? (settings.model ?? next.defaultModel) : next.defaultModel;
+    setModel(m);
+    setCustomModel(Boolean(m) && !next.models.includes(m));
     setTest(null);
   };
   const body = () => ({
@@ -179,13 +185,43 @@ function ReaderForm({
             }}
           />
         </Field>
-        <Field label="Model" hint={info.models.length ? "Pick one or type any model name your key can use" : "Model name at your provider"}>
-          <input className="input" list="reader-models" value={model} onChange={(e) => setModel(e.target.value)} placeholder={info.defaultModel || "model-name"} />
-          <datalist id="reader-models">
-            {info.models.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
+        <Field
+          label="Model"
+          hint={info.models.length ? "Choose “Other” to use a model that isn't in the list" : "Model name at your provider"}
+        >
+          {info.models.length > 0 && (
+            <select
+              className="input"
+              value={customModel ? OTHER : model}
+              onChange={(e) => {
+                if (e.target.value === OTHER) {
+                  setCustomModel(true);
+                  setModel("");
+                } else {
+                  setCustomModel(false);
+                  setModel(e.target.value);
+                }
+                setTest(null);
+              }}
+            >
+              {info.models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                  {m === info.defaultModel ? " (recommended)" : ""}
+                </option>
+              ))}
+              <option value={OTHER}>Other… (type a model name)</option>
+            </select>
+          )}
+          {(customModel || info.models.length === 0) && (
+            <input
+              className={`input ${info.models.length ? "mt-2" : ""}`}
+              value={model}
+              autoFocus={customModel}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder="exact model name, e.g. gpt-5.1"
+            />
+          )}
         </Field>
         {info.needsBaseUrl && (
           <Field label="Service URL" hint="The OpenAI-style API base, e.g. https://openrouter.ai/api/v1" className="sm:col-span-2">

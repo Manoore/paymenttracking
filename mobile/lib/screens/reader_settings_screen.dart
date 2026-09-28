@@ -24,6 +24,10 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
   String? _testMsg;
   bool? _testOk;
 
+  static const _other = '__other__';
+  bool _customModel = false;
+  List<String> get _models => ((_info['models'] as List?) ?? const []).cast<String>();
+
   Map<String, dynamic> get _info => _providers.firstWhere((p) => p['id'] == _provider, orElse: () => const {});
 
   @override
@@ -51,6 +55,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
         _settings = s;
         _provider = s['provider'] as String? ?? 'openai';
         _model.text = s['model'] as String? ?? (_info['defaultModel'] as String? ?? '');
+        _customModel = _model.text.isNotEmpty && !_models.contains(_model.text);
         _baseUrl.text = s['baseUrl'] as String? ?? '';
         _limit.text = '${s['monthlyLimit'] ?? 200}';
         _autoRead = s['autoRead'] as bool? ?? true;
@@ -64,6 +69,7 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
     setState(() {
       _provider = id;
       _model.text = id == _settings?['provider'] ? (_settings?['model'] as String? ?? '') : (_info['defaultModel'] as String? ?? '');
+      _customModel = _model.text.isNotEmpty && !_models.contains(_model.text);
       _testMsg = null;
     });
   }
@@ -163,22 +169,31 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _model,
-                  autocorrect: false,
-                  decoration: dec('Model', h: 'Pick one or type any model name your key can use').copyWith(
-                    suffixIcon: ((_info['models'] as List?) ?? const []).isEmpty
-                        ? null
-                        : PopupMenuButton<String>(
-                            tooltip: 'Suggested models',
-                            icon: const Icon(Icons.arrow_drop_down),
-                            onSelected: (m) => setState(() => _model.text = m),
-                            itemBuilder: (_) => [
-                              for (final m in ((_info['models'] as List?) ?? const []).cast<String>()) PopupMenuItem(value: m, child: Text(m)),
-                            ],
-                          ),
+                if (_models.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('model-$_provider'),
+                    initialValue: _customModel ? _other : (_models.contains(_model.text) ? _model.text : _models.first),
+                    isExpanded: true,
+                    decoration: dec('Model', h: 'Choose “Other” to use a model that isn’t in the list'),
+                    items: [
+                      for (final m in _models)
+                        DropdownMenuItem(value: m, child: Text(m == _info['defaultModel'] ? '$m (recommended)' : m)),
+                      const DropdownMenuItem(value: _other, child: Text('Other… (type a model name)')),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _customModel = v == _other;
+                      _model.text = _customModel ? '' : (v ?? '');
+                      _testMsg = null;
+                    }),
                   ),
-                ),
+                if (_customModel || _models.isEmpty) ...[
+                  if (_models.isNotEmpty) const SizedBox(height: 12),
+                  TextField(
+                    controller: _model,
+                    autocorrect: false,
+                    decoration: dec('Model name', h: 'Exact model name at your provider, e.g. gpt-5.1'),
+                  ),
+                ],
                 if (_info['needsBaseUrl'] == true) ...[
                   const SizedBox(height: 12),
                   TextField(controller: _baseUrl, keyboardType: TextInputType.url, decoration: dec('Service URL', h: 'e.g. https://openrouter.ai/api/v1')),
