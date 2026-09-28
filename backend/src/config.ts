@@ -29,7 +29,10 @@ if (!parsed.success) {
 
 export const config = {
   ...parsed.data,
-  corsOrigins: parsed.data.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
+  // Forgive common copy/paste slips: quotes, spaces, trailing slashes, upper case.
+  corsOrigins: parsed.data.CORS_ORIGINS.split(",")
+    .map((s) => s.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "").toLowerCase())
+    .filter(Boolean),
   allowSignup: parsed.data.ALLOW_SIGNUP === "true",
   isProd: parsed.data.NODE_ENV === "production",
 };

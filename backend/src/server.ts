@@ -7,6 +7,7 @@ async function main() {
   await mongoose.connect(config.MONGODB_URI, { autoIndex: true, serverSelectionTimeoutMS: 15_000 });
   const server = createApp().listen(config.PORT, () => {
     console.log(`Capture Hub API listening on :${config.PORT}`);
+    console.log(`Allowed browser origins (CORS_ORIGINS): ${config.corsOrigins.join(", ") || "(none)"}`);
   });
 
   const shutdown = async (signal: string) => {
