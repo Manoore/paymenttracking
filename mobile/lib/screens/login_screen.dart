@@ -72,7 +72,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 4),
                   Text('Your private place for payment proof, expenses and everything worth keeping.',
                       style: TextStyle(color: Theme.of(context).colorScheme.outline)),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Sign in')),
+                      ButtonSegment(value: true, label: Text('Create account')),
+                    ],
+                    selected: {_register},
+                    onSelectionChanged: (v) => setState(() {
+                      _register = v.first;
+                      _error = null;
+                    }),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_register && !_signupOpen) ...[
+                    const Text('New sign-ups are closed. This Capture Hub is private; sign in if you already have an account.'),
+                    const SizedBox(height: 12),
+                  ],
                   if (_register) ...[
                     TextField(
                       controller: _name,
@@ -105,19 +121,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   const SizedBox(height: 20),
                   FilledButton(
-                    onPressed: _busy ? null : _submit,
+                    onPressed: _busy || (_register && !_signupOpen) ? null : _submit,
                     child: _busy
                         ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : Text(_register ? 'Create account' : 'Sign in'),
                   ),
-                  if (_signupOpen)
-                    TextButton(
-                      onPressed: () => setState(() {
-                        _register = !_register;
-                        _error = null;
-                      }),
-                      child: Text(_register ? 'Have an account? Sign in' : 'First time here? Create your account'),
-                    ),
                 ]),
               ),
             ),

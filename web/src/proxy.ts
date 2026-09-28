@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/welcome"];
+const PUBLIC_PATHS = ["/login", "/signup", "/welcome"];
 
 /**
  * Signed-out visitors see the landing page at "/" and are sent to /login for
@@ -19,7 +19,7 @@ export function proxy(req: NextRequest) {
     url.searchParams.set("next", pathname + search);
     return NextResponse.redirect(url);
   }
-  if (signedIn && pathname === "/login") return NextResponse.redirect(new URL("/", req.url));
+  if (signedIn && (pathname === "/login" || pathname === "/signup")) return NextResponse.redirect(new URL("/", req.url));
   return NextResponse.next();
 }
 

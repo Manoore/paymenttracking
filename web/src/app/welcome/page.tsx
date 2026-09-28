@@ -139,8 +139,11 @@ export default function WelcomePage() {
             <span className="hidden md:inline-flex">
               <ThemeSwitcher compact />
             </span>
-            <Link href="/login" className="btn-primary">
+            <Link href="/login" className="btn-ghost">
               Sign in
+            </Link>
+            <Link href="/signup" className="btn-primary">
+              Sign up
             </Link>
           </nav>
         </div>
@@ -159,7 +162,7 @@ export default function WelcomePage() {
               organized by who, what, when and which property or trip.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/login" className="btn-primary px-6">
+              <Link href="/signup" className="btn-primary px-6">
                 Get started <ArrowRight size={18} />
               </Link>
               <a href="#how" className="btn-secondary px-6">
@@ -259,7 +262,7 @@ export default function WelcomePage() {
         <section className="mx-auto max-w-6xl px-4 pb-20 text-center md:px-8">
           <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Stop digging through screenshots.</h2>
           <p className="mt-2 text-muted">Set up your space in under a minute.</p>
-          <Link href="/login" className="btn-primary mt-6 px-8">
+          <Link href="/signup" className="btn-primary mt-6 px-8">
             Get started <ArrowRight size={18} />
           </Link>
         </section>

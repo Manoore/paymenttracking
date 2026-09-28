@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import { AuthForm } from "@/components/AuthForm";
 
-export const metadata = { title: "Sign in" };
+export const metadata = { title: "Create account" };
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <Suspense>
-      <AuthForm initialMode="login" />
+      <AuthForm initialMode="register" />
     </Suspense>
   );
 }
