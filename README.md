@@ -65,6 +65,11 @@ Add GitHub repo secrets `API_URL` (Render URL) and `CRON_SECRET` (copy from Rend
 [`reminders.yml`](.github/workflows/reminders.yml) runs daily and creates in-app notifications.
 For email reminders, also set `RESEND_API_KEY` and `REMINDER_FROM_EMAIL` on Render.
 
+### 4b. Push notifications (optional)
+Run `npx web-push generate-vapid-keys` once and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+`VAPID_SUBJECT` (e.g. `mailto:you@example.com`) on Render. Then each person turns them on per device in
+**Profile → Notifications**. On iPhone this works after adding the web app to the Home Screen (iOS 16.4+).
+
 ### 5. Mobile
 ```bash
 cd mobile

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Download, Paperclip } from "lucide-react";
+import { Download, FileText, Paperclip } from "lucide-react";
 import { Empty, ErrorNote, PageHeader, Spinner, StatusBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -83,6 +83,21 @@ export default function ReimbursementsPage() {
                 >
                   <Download size={16} /> CSV
                 </button>
+                {g.key !== "Unassigned" && (
+                  <button
+                    className="btn-primary"
+                    title="Summary plus every receipt in one PDF, ready to send"
+                    onClick={() =>
+                      void api.download(
+                        "/reimbursements/packet.pdf",
+                        { groupBy, key: g.key, includeDone },
+                        `reimbursement-${g.key.replace(/\W+/g, "-").toLowerCase()}.pdf`,
+                      )
+                    }
+                  >
+                    <FileText size={16} /> PDF packet
+                  </button>
+                )}
               </div>
               <div className="divide-y divide-border">
                 {g.items.map((i) => (

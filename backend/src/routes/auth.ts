@@ -49,6 +49,7 @@ async function publicUser(userId: unknown) {
     preferences: {
       emailReminders: user.preferences?.emailReminders ?? true,
       reminderEmail: user.preferences?.reminderEmail ?? null,
+      weeklyDigest: user.preferences?.weeklyDigest ?? true,
     },
     createdAt: user.createdAt,
     defaultWorkspaceId: user.defaultWorkspaceId,
@@ -137,6 +138,7 @@ const profileBody = z.object({
     .object({
       emailReminders: z.boolean().optional(),
       reminderEmail: z.string().trim().toLowerCase().email().max(200).nullish(),
+      weeklyDigest: z.boolean().optional(),
     })
     .optional(),
   // Workspace-level settings the owner can change from their profile.
@@ -157,6 +159,7 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
   if (body.phone !== undefined) user.set("phone", body.phone || undefined);
   if (body.timezone !== undefined) user.timezone = body.timezone;
   if (body.preferences?.emailReminders !== undefined) user.set("preferences.emailReminders", body.preferences.emailReminders);
+  if (body.preferences?.weeklyDigest !== undefined) user.set("preferences.weeklyDigest", body.preferences.weeklyDigest);
   if (body.preferences?.reminderEmail !== undefined)
     user.set("preferences.reminderEmail", body.preferences.reminderEmail || undefined);
   await user.save();

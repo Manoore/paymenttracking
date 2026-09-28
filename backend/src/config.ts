@@ -18,6 +18,10 @@ const schema = z.object({
   RESEND_API_KEY: z.string().optional(),
   REMINDER_FROM_EMAIL: z.string().optional(),
   WEB_APP_URL: z.string().default("http://localhost:3000"),
+  // Web push (browser notifications). Generate with: npx web-push generate-vapid-keys
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default("mailto:admin@example.com"),
 });
 
 const parsed = schema.safeParse(process.env);

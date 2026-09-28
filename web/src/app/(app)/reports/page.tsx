@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Archive, Download } from "lucide-react";
 import { Empty, ErrorNote, Field, PageHeader, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
 import { formatMoney, TYPE_LABELS } from "@/lib/format";
@@ -36,6 +36,7 @@ export default function ReportsPage() {
   const [type, setType] = useState<string>("payment,expense");
   const [from, setFrom] = useState(startOfYear());
   const [to, setTo] = useState("");
+  const [zipping, setZipping] = useState(false);
   const filters = { type, from, to: to || undefined };
   const { data, error, loading } = useApi<{ rows: Row[] }>("/reports/summary", { groupBy, ...filters });
 
@@ -62,12 +63,27 @@ export default function ReportsPage() {
         title="Reports"
         subtitle="Totals by category, property, trip or month. Export anything to CSV."
         actions={
-          <button
-            className="btn-secondary"
-            onClick={() => void api.download("/reports/export.csv", filters, `capture-hub-${from || "all"}.csv`)}
-          >
-            <Download size={16} /> Export CSV
-          </button>
+          <>
+            <button
+              className="btn-secondary"
+              onClick={() => void api.download("/reports/export.csv", filters, `capture-hub-${from || "all"}.csv`)}
+            >
+              <Download size={16} /> Export CSV
+            </button>
+            <button
+              className="btn-secondary"
+              title="CSV plus every receipt, filed in folders by category: ready for your accountant"
+              disabled={zipping}
+              onClick={() => {
+                setZipping(true);
+                void api
+                  .download("/reports/export.zip", filters, `capture-hub-${from.slice(0, 4) || "all"}.zip`)
+                  .finally(() => setZipping(false));
+              }}
+            >
+              <Archive size={16} /> {zipping ? "Preparing…" : "ZIP with receipts"}
+            </button>
+          </>
         }
       />
 

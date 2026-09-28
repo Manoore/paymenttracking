@@ -1,19 +1,10 @@
-import { config } from "../config.js";
 import { formatMinor } from "../lib/csv.js";
+import { notifyUser } from "../lib/notify.js";
 import { addDays, startOfUtcDay } from "../lib/recurrence.js";
 import { Capture } from "../models/Capture.js";
-import { Membership, User } from "../models/identity.js";
-import { Notification, RecurringSchedule } from "../models/RecurringSchedule.js";
+import { Membership } from "../models/identity.js";
+import { RecurringSchedule } from "../models/RecurringSchedule.js";
 
-async function sendEmail(to: string, subject: string, text: string) {
-  if (!config.RESEND_API_KEY || !config.REMINDER_FROM_EMAIL) return false;
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${config.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: config.REMINDER_FROM_EMAIL, to, subject, text }),
-  });
-  return res.ok;
-}
 
 /**
  * Creates in-app notifications (and optional emails) for schedules that are due
@@ -39,12 +30,17 @@ export async function runReminders(now = new Date()) {
 
     const members = await Membership.find({ workspaceId: s.workspaceId, role: { $in: ["owner", "editor"] } }).lean();
     for (const m of members) {
-      await Notification.create({ workspaceId: s.workspaceId, userId: m.userId, kind: overdue ? "overdue" : "due_soon", title, body, scheduleId: s._id });
+      const r = await notifyUser({
+        userId: m.userId,
+        workspaceId: s.workspaceId,
+        kind: overdue ? "overdue" : "due_soon",
+        title,
+        body,
+        path: `/recurring/${s._id}`,
+        scheduleId: s._id,
+      });
       created++;
-      const user = await User.findById(m.userId).lean();
-      const wantsEmail = user && user.preferences?.emailReminders !== false;
-      const to = user?.preferences?.reminderEmail || user?.email;
-      if (wantsEmail && to && (await sendEmail(to, title, `${body}\n\nOpen: ${config.WEB_APP_URL}/recurring/${s._id}`))) emailed++;
+      if (r.emailed) emailed++;
     }
     s.lastRemindedFor = s.nextDueDate;
     await s.save();
@@ -90,14 +86,16 @@ async function remindDatedCaptures(today: Date, now: Date) {
           ? [{ userId: c.createdBy }]
           : await Membership.find({ workspaceId: c.workspaceId, role: { $in: ["owner", "editor"] } }).lean();
       for (const m of recipients) {
-        await Notification.create({ workspaceId: c.workspaceId, userId: m.userId, kind: rule.kind, title, captureId: c._id });
+        const r = await notifyUser({
+          userId: m.userId,
+          workspaceId: c.workspaceId,
+          kind: rule.kind,
+          title,
+          path: `/captures/${c._id}`,
+          captureId: c._id,
+        });
         created++;
-        const user = await User.findById(m.userId).lean();
-        const to = user?.preferences?.reminderEmail || user?.email;
-        if (user?.preferences?.emailReminders !== false && to && (await sendEmail(to, title, `${title}
-
-Open: ${config.WEB_APP_URL}/captures/${c._id}`)))
-          emailed++;
+        if (r.emailed) emailed++;
       }
       await Capture.updateOne({ _id: c._id }, { $addToSet: { remindedFor: key } });
     }

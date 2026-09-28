@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Loader2, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, BellOff, CheckCircle2, Loader2, LogOut } from "lucide-react";
+import { disablePush, enablePush, pushState, type PushState } from "@/lib/push";
 import { ErrorNote, Field, PageHeader, Section, Spinner } from "@/components/ui";
 import { api, ApiError, changePassword, logout } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -35,6 +36,7 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: (u: User) => void
     phone: user.phone ?? "",
     timezone: user.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     emailReminders: user.preferences.emailReminders,
+    weeklyDigest: user.preferences.weeklyDigest ?? true,
     reminderEmail: user.preferences.reminderEmail ?? "",
     workspaceName: ws?.name ?? "",
     defaultCurrency: ws?.defaultCurrency ?? "USD",
@@ -61,7 +63,7 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: (u: User) => void
         name: f.name,
         phone: f.phone.trim() || null,
         timezone: f.timezone,
-        preferences: { emailReminders: f.emailReminders, reminderEmail: f.reminderEmail.trim() || null },
+        preferences: { emailReminders: f.emailReminders, reminderEmail: f.reminderEmail.trim() || null, weeklyDigest: f.weeklyDigest },
         ...(isOwner ? { workspace: { name: f.workspaceName, defaultCurrency: f.defaultCurrency } } : {}),
       });
       onSaved(updated);
@@ -115,6 +117,21 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: (u: User) => void
               <span className="text-sm text-muted">In-app reminders always appear on your dashboard.</span>
             </span>
           </label>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-5 w-5"
+              checked={f.weeklyDigest}
+              onChange={(e) => {
+                setSaved(false);
+                setF((p) => ({ ...p, weeklyDigest: e.target.checked }));
+              }}
+            />
+            <span>
+              <span className="block font-medium">Weekly summary email</span>
+              <span className="text-sm text-muted">Bills due this week, money owed to you and upcoming deadlines, once a week.</span>
+            </span>
+          </label>
           {f.emailReminders && (
             <Field label="Send reminders to" hint={`Leave blank to use ${user.email}`}>
               <input className="input" type="email" placeholder={user.email} {...bind("reminderEmail")} />
@@ -156,6 +173,74 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: (u: User) => void
         <Saved show={saved} />
       </div>
     </form>
+  );
+}
+
+/** Browser push on this device (phone or computer). */
+function PushSettings() {
+  const [state, setState] = useState<PushState | "loading">("loading");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    pushState()
+      .then(setState)
+      .catch(() => setState("unsupported"));
+  }, []);
+
+  const run = async (fn: () => Promise<unknown>, after: PushState, note?: string) => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+      setState(after);
+      if (note) setMsg(note);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const text: Record<PushState | "loading", string> = {
+    loading: "Checking this device…",
+    unsupported: "This browser can't receive notifications. On iPhone, first add Capture Hub to your Home Screen (Share → Add to Home Screen), then open it from there.",
+    "not-configured": "Notifications aren't set up on the server yet (VAPID keys missing).",
+    denied: "Notifications are blocked for this site. Allow them in your browser's site settings, then reload.",
+    off: "Get bill reminders and deadlines as notifications on this device.",
+    on: "On for this device.",
+  };
+
+  return (
+    <Section title="Notifications">
+      <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">Push notifications</p>
+          <p className="text-sm text-muted">{text[state]}</p>
+          {msg && <p className="mt-1 text-sm text-accent">{msg}</p>}
+        </div>
+        {state === "off" && (
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => void run(enablePush, "on", "Enabled. Try “Send test”.")}>
+            <Bell size={16} /> Turn on
+          </button>
+        )}
+        {state === "on" && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy}
+              onClick={() => void run(() => api.post("/push/test"), "on", "Test sent. It should appear in a few seconds.")}
+            >
+              Send test
+            </button>
+            <button type="button" className="btn-ghost" disabled={busy} onClick={() => void run(disablePush, "off")}>
+              <BellOff size={16} /> Turn off
+            </button>
+          </div>
+        )}
+      </div>
+    </Section>
   );
 }
 
@@ -300,6 +385,7 @@ export default function ProfilePage() {
         </div>
       </Section>
       <ProfileForm user={data.user} onSaved={(u) => setData({ user: u })} />
+      <PushSettings />
       <CalendarFeed />
       <PasswordForm />
     </>

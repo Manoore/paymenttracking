@@ -12,6 +12,22 @@ const userSchema = new Schema(
       emailReminders: { type: Boolean, default: true },
       // Optional separate address for reminders (e.g. a shared household inbox).
       reminderEmail: { type: String, trim: true, lowercase: true },
+      weeklyDigest: { type: Boolean, default: true },
+    },
+    lastDigestAt: Date,
+    // Browser push subscriptions, one per device that enabled notifications.
+    pushSubscriptions: {
+      type: [
+        {
+          endpoint: { type: String, required: true },
+          p256dh: { type: String, required: true },
+          auth: { type: String, required: true },
+          userAgent: String,
+          createdAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: undefined,
+      select: false,
     },
     passwordChangedAt: Date,
     // Secret for the read-only calendar feed URL; regenerate to revoke.

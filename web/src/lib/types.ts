@@ -115,7 +115,7 @@ export interface User {
   name: string;
   phone: string | null;
   timezone: string | null;
-  preferences: { emailReminders: boolean; reminderEmail: string | null };
+  preferences: { emailReminders: boolean; reminderEmail: string | null; weeklyDigest: boolean };
   createdAt: string;
   defaultWorkspaceId: string;
   workspaces: Workspace[];

@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import { pinoHttp } from "pino-http";
 import { config } from "./config.js";
 import { unauthorized } from "./lib/errors.js";
+import { runWeeklyDigest } from "./jobs/digest.js";
 import { runReminders } from "./jobs/reminders.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/errors.js";
@@ -13,7 +14,9 @@ import { attachmentsRouter, filesRouter } from "./routes/attachments.js";
 import { authRouter } from "./routes/auth.js";
 import { calendarRouter } from "./routes/calendar.js";
 import { capturesRouter } from "./routes/captures.js";
+import { exportsRouter } from "./routes/exports.js";
 import { insightsRouter } from "./routes/insights.js";
+import { pushRouter } from "./routes/push.js";
 import { recurringRouter } from "./routes/recurring.js";
 
 export function createApp() {
@@ -52,6 +55,9 @@ export function createApp() {
   api.use("/captures", requireAuth, capturesRouter);
   api.use("/attachments", requireAuth, attachmentsRouter);
   api.use("/recurring", requireAuth, recurringRouter);
+  // Mounted before the catch-all "/" routers so /push/key stays public.
+  api.use("/push", pushRouter);
+  api.use("/", requireAuth, exportsRouter);
   api.use("/", requireAuth, insightsRouter);
   app.use("/api/v1", api);
   app.use("/files", filesRouter);
@@ -65,7 +71,9 @@ export function createApp() {
       given.length === expected.length &&
       crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
     if (!ok) throw unauthorized();
-    res.json(await runReminders());
+    const reminders = await runReminders();
+    const digest = await runWeeklyDigest();
+    res.json({ ...reminders, digest });
   });
 
   app.use(notFoundHandler);
