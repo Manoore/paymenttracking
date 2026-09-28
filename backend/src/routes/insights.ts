@@ -10,6 +10,16 @@ import { Notification, RecurringSchedule } from "../models/RecurringSchedule.js"
 
 export const insightsRouter = Router();
 
+// Organization lives at the top level; older reimbursable records only have it on the reimbursement.
+const ORG = { $ifNull: ["$organization", "$expense.reimbursement.organization"] };
+
+/**
+ * Group text values case- and space-insensitively ("India Club" == "india club ")
+ * while displaying the first spelling seen.
+ */
+const ciKey = (expr: unknown) => ({ $toLower: { $trim: { input: { $ifNull: [expr, ""] } } } });
+const label = (v: unknown, fallback: string) => (typeof v === "string" && v.trim() ? v.trim() : fallback);
+
 insightsRouter.get("/dashboard", async (req, res) => {
   const { workspaceId, userId } = ctx(req);
   const today = startOfUtcDay();
@@ -27,7 +37,8 @@ insightsRouter.get("/dashboard", async (req, res) => {
       { $match: { $and: [base, { "expense.reimbursable": true, "expense.reimbursement.status": { $ne: "reimbursed" } }] } },
       {
         $group: {
-          _id: { organization: { $ifNull: ["$expense.reimbursement.organization", "Unassigned"] }, currency: "$currency" },
+          _id: { key: ciKey(ORG), currency: "$currency" },
+          organization: { $first: ORG },
           count: { $sum: 1 },
           outstandingMinor: {
             $sum: { $subtract: [{ $ifNull: ["$amountMinor", 0] }, { $ifNull: ["$expense.reimbursement.amountReimbursedMinor", 0] }] },
@@ -45,14 +56,14 @@ insightsRouter.get("/dashboard", async (req, res) => {
     upcoming,
     recent,
     inboxCount,
-    reimbursementsOwed: owed.map((g) => ({ organization: g._id.organization, currency: g._id.currency, count: g.count, outstandingMinor: g.outstandingMinor })),
+    reimbursementsOwed: owed.map((g) => ({ organization: label(g.organization, "Unassigned"), currency: g._id.currency, count: g.count, outstandingMinor: g.outstandingMinor })),
     unclearedDeposits: uncleared,
     unreadNotifications: unread,
   });
 });
 
 const groupFields = {
-  organization: "$expense.reimbursement.organization",
+  organization: ORG,
   trip: "$trip",
 } as const;
 
@@ -71,7 +82,8 @@ insightsRouter.get("/reimbursements", async (req, res) => {
     { $sort: { occurredAt: -1 } },
     {
       $group: {
-        _id: { key: { $ifNull: [groupFields[groupBy], "Unassigned"] }, currency: "$currency" },
+        _id: { key: ciKey(groupFields[groupBy]), currency: "$currency" },
+        label: { $first: groupFields[groupBy] },
         totalMinor: { $sum: { $ifNull: ["$amountMinor", 0] } },
         reimbursedMinor: { $sum: { $ifNull: ["$expense.reimbursement.amountReimbursedMinor", 0] } },
         items: {
@@ -82,6 +94,7 @@ insightsRouter.get("/reimbursements", async (req, res) => {
             amountMinor: "$amountMinor",
             occurredAt: "$occurredAt",
             trip: "$trip",
+            organization: ORG,
             reimbursement: "$expense.reimbursement",
             attachmentCount: { $size: { $ifNull: ["$attachmentIds", []] } },
           },
@@ -93,7 +106,7 @@ insightsRouter.get("/reimbursements", async (req, res) => {
   res.json({
     groupBy,
     groups: groups.map((g) => ({
-      key: g._id.key,
+      key: label(g.label, "Unassigned"),
       currency: g._id.currency,
       totalMinor: g.totalMinor,
       reimbursedMinor: g.reimbursedMinor,
@@ -108,6 +121,7 @@ const summaryGroups = {
   property: "$property",
   trip: "$trip",
   counterparty: "$counterparty",
+  organization: ORG,
   type: "$type",
   month: { $dateToString: { format: "%Y-%m", date: { $ifNull: ["$occurredAt", "$createdAt"] } } },
 } as const;
@@ -119,7 +133,8 @@ insightsRouter.get("/reports/summary", async (req, res) => {
     { $match: { $and: [filter, { amountMinor: { $ne: null } }] } },
     {
       $group: {
-        _id: { key: { $ifNull: [summaryGroups[groupBy], "(none)"] }, currency: "$currency", type: "$type" },
+        _id: { key: ciKey(summaryGroups[groupBy]), currency: "$currency", type: "$type" },
+        label: { $first: summaryGroups[groupBy] },
         totalMinor: { $sum: "$amountMinor" },
         count: { $sum: 1 },
       },
@@ -128,7 +143,7 @@ insightsRouter.get("/reports/summary", async (req, res) => {
   ]);
   res.json({
     groupBy,
-    rows: rows.map((r) => ({ key: r._id.key, currency: r._id.currency, type: r._id.type, totalMinor: r.totalMinor, count: r.count })),
+    rows: rows.map((r) => ({ key: label(r.label, "(none)"), groupKey: r._id.key as string, currency: r._id.currency, type: r._id.type, totalMinor: r.totalMinor, count: r.count })),
   });
 });
 
@@ -137,8 +152,8 @@ insightsRouter.get("/reports/export.csv", async (req, res) => {
   const items = await Capture.find(filter).sort({ occurredAt: -1, createdAt: -1 }).limit(10_000).lean();
   const csv = toCsv(
     [
-      "Date", "Type", "Title", "Counterparty", "Amount", "Currency", "Category", "Property", "Trip", "Tags",
-      "Method", "Confirmation #", "Reimbursable", "Reimbursement org", "Reimbursement status", "Reimbursed amount",
+      "Date", "Type", "Title", "Counterparty", "Amount", "Currency", "Category", "Property", "Trip", "Organization", "Tags",
+      "Method", "Confirmation #", "Reimbursable", "Reimbursement status", "Reimbursed amount",
       "Check #", "Cleared", "Attachments", "Notes", "Id",
     ],
     items.map((c) => [
@@ -151,11 +166,11 @@ insightsRouter.get("/reports/export.csv", async (req, res) => {
       c.category,
       c.property,
       c.trip,
+      c.organization ?? c.expense?.reimbursement?.organization,
       (c.tags ?? []).join("; "),
       c.payment?.method ?? c.expense?.paymentMethod,
       c.payment?.confirmationNumber,
       c.expense?.reimbursable ? "yes" : "",
-      c.expense?.reimbursement?.organization,
       c.expense?.reimbursement?.status,
       formatMinor(c.expense?.reimbursement?.amountReimbursedMinor),
       c.deposit?.checkNumber,
@@ -176,16 +191,22 @@ const SUGGEST_FIELDS = {
   trip: "trip",
   category: "category",
   tags: "tags",
-  organization: "expense.reimbursement.organization",
+  organization: "organization",
   method: "payment.method",
 } as const;
 
 insightsRouter.get("/suggestions", async (req, res) => {
   const field = z.enum(Object.keys(SUGGEST_FIELDS) as [keyof typeof SUGGEST_FIELDS]).parse(req.query.field);
-  const values = (await Capture.distinct(SUGGEST_FIELDS[field], scope(req))) as unknown[];
-  const cleaned = [...new Set(values.filter((v): v is string => typeof v === "string" && v.trim() !== ""))].sort((a, b) =>
-    a.localeCompare(b),
-  );
+  const paths = field === "organization" ? ["organization", "expense.reimbursement.organization"] : [SUGGEST_FIELDS[field]];
+  const values = (await Promise.all(paths.map((p) => Capture.distinct(p, scope(req))))).flat() as unknown[];
+  // One suggestion per name regardless of case, so "India Club" isn't offered next to "india club".
+  const byKey = new Map<string, string>();
+  for (const v of values) {
+    if (typeof v !== "string" || !v.trim()) continue;
+    const key = v.trim().toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, v.trim());
+  }
+  const cleaned = [...byKey.values()].sort((a, b) => a.localeCompare(b));
   res.json({ field, values: cleaned.slice(0, 500) });
 });
 

@@ -50,6 +50,11 @@ async function assertLinksOwned(req: Request, links: { captureId: string }[] | u
 }
 
 function normaliseDerived(doc: HydratedDocument<CaptureDoc>) {
+  // One organization field for every type. Older records kept it only on the
+  // reimbursement; adopt it, and keep the reimbursement copy in sync.
+  const reimbursementOrg = doc.expense?.reimbursement?.organization;
+  if (!doc.organization && reimbursementOrg) doc.organization = reimbursementOrg;
+  if (doc.expense?.reimbursement) doc.set("expense.reimbursement.organization", doc.organization || undefined);
   // Keep type-specific sub-documents consistent with the type.
   if (doc.expense?.reimbursable && !doc.expense.reimbursement) doc.set("expense.reimbursement", { status: "to_submit" });
   if (doc.deposit?.cleared && !doc.deposit.clearedAt) doc.set("deposit.clearedAt", new Date());

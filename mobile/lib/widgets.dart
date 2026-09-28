@@ -69,7 +69,7 @@ class CaptureTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = capture;
     final scheme = Theme.of(context).colorScheme;
-    final meta = [formatDate(c.date), c.counterparty, c.property, c.trip].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
+    final meta = [formatDate(c.date), c.counterparty, c.organization, c.property, c.trip].whereType<String>().where((s) => s.isNotEmpty).join(' · ');
     final chips = <Widget>[
       if (!c.filed) _Chip('Inbox', scheme.tertiaryContainer, scheme.onTertiaryContainer),
       if (c.reimbursable && c.reimbursement != null)

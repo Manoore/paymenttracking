@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { logout } from "@/lib/api";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -56,6 +57,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <div className="mb-2 px-1">
+          <ThemeSwitcher compact />
+        </div>
         <Link
           href="/profile"
           className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${

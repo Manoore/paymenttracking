@@ -67,6 +67,7 @@ class Capture {
         createdAt = _date(j['createdAt']) ?? DateTime.now(),
         property = j['property'] as String?,
         trip = j['trip'] as String?,
+        organization = (j['organization'] ?? j['expense']?['reimbursement']?['organization']) as String?,
         method = (j['payment']?['method'] ?? j['expense']?['paymentMethod']) as String?,
         confirmationNumber = j['payment']?['confirmationNumber'] as String?,
         scheduleId = j['payment']?['scheduleId'] as String?,
@@ -98,6 +99,7 @@ class Capture {
   final DateTime createdAt;
   final String? property;
   final String? trip;
+  final String? organization;
   final String? method;
   final String? confirmationNumber;
   final String? scheduleId;

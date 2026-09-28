@@ -69,11 +69,11 @@ class _CaptureDetailScreenState extends State<CaptureDetailScreen> {
           ('Category', c.category),
           ('Property', c.property),
           ('Trip / project', c.trip),
+          ('Organization', c.organization),
           ('Method', c.method),
           ('Confirmation #', c.confirmationNumber),
           if (r != null) ...[
             ('Reimbursement', statusLabels[r.status]),
-            ('Reimbursed by', r.organization),
             ('Amount reimbursed', r.amountReimbursedMinor == null || r.amountReimbursedMinor == 0 ? null : formatMoney(r.amountReimbursedMinor, c.currency)),
           ],
           ('Check #', c.checkNumber),

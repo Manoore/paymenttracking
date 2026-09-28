@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api.dart';
+import '../theme.dart';
 import '../widgets.dart';
 
 const _currencies = ['USD', 'INR', 'EUR', 'GBP', 'CAD', 'AUD', 'SGD', 'AED', 'JPY'];
@@ -111,6 +112,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [
+                const SectionTitle('Appearance'),
+                ThemeModePicker(controller: context.read<ThemeController>()),
                 const SectionTitle('Your info'),
                 TextField(controller: _name, textCapitalization: TextCapitalization.words, decoration: _dec('Name')),
                 const SizedBox(height: 12),

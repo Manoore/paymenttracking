@@ -12,12 +12,20 @@ import 'screens/profile_screen.dart';
 import 'screens/recurring_screens.dart';
 import 'screens/reimbursements_screen.dart';
 import 'screens/shell.dart';
+import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final api = Api();
-  await api.restore();
-  runApp(ChangeNotifierProvider.value(value: api, child: CaptureHubApp(api: api)));
+  final theme = ThemeController();
+  await Future.wait([api.restore(), theme.load()]);
+  runApp(MultiProvider(
+    providers: [
+      ChangeNotifierProvider.value(value: api),
+      ChangeNotifierProvider.value(value: theme),
+    ],
+    child: CaptureHubApp(api: api),
+  ));
 }
 
 class CaptureHubApp extends StatefulWidget {
@@ -69,6 +77,7 @@ class _CaptureHubAppState extends State<CaptureHubApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
       darkTheme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.dark),
+      themeMode: context.watch<ThemeController>().mode,
       routerConfig: _router,
     );
   }

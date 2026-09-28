@@ -12,6 +12,7 @@ const GROUPS = {
   category: "Category",
   property: "Property",
   trip: "Trip / project",
+  organization: "Organization",
   counterparty: "Payee / merchant",
   month: "Month",
   type: "Type",
@@ -19,6 +20,7 @@ const GROUPS = {
 
 interface Row {
   key: string;
+  groupKey: string; // case-insensitive grouping key from the API
   currency: string;
   type: CaptureType;
   totalMinor: number;
@@ -40,8 +42,9 @@ export default function ReportsPage() {
   // Merge rows that differ only by type so each group shows one total per currency.
   const merged = new Map<string, { key: string; currency: string; totalMinor: number; count: number }>();
   for (const r of data?.rows ?? []) {
-    const k = `${groupBy === "type" ? TYPE_LABELS[r.key as CaptureType] ?? r.key : r.key}|${r.currency}`;
-    const cur = merged.get(k) ?? { key: k.split("|")[0], currency: r.currency, totalMinor: 0, count: 0 };
+    const k = `${r.groupKey}|${r.currency}`;
+    const display = groupBy === "type" ? (TYPE_LABELS[r.key as CaptureType] ?? r.key) : r.key;
+    const cur = merged.get(k) ?? { key: display, currency: r.currency, totalMinor: 0, count: 0 };
     cur.totalMinor += r.totalMinor;
     cur.count += r.count;
     merged.set(k, cur);

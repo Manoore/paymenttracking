@@ -64,7 +64,7 @@ function initialState(c?: Capture, prefill?: Partial<FormState>): FormState {
     confirmationNumber: c?.payment?.confirmationNumber ?? "",
     project: c?.expense?.project ?? "",
     reimbursable: c?.expense?.reimbursable ?? false,
-    organization: r?.organization ?? "",
+    organization: c?.organization ?? r?.organization ?? "",
     status: r?.status ?? "to_submit",
     submittedAt: toDateInput(r?.submittedAt),
     reimbursedAmount: minorToInput(r?.amountReimbursedMinor),
@@ -97,6 +97,7 @@ function toPayload(s: FormState, isNew: boolean) {
     category: blank(s.category),
     property: blank(s.property),
     trip: blank(s.trip),
+    organization: blank(s.organization),
     counterparty: blank(s.counterparty),
     url: blank(s.url),
     occurredAt: s.occurredAt || null,
@@ -111,7 +112,6 @@ function toPayload(s: FormState, isNew: boolean) {
             reimbursable: s.reimbursable,
             reimbursement: s.reimbursable
               ? {
-                  organization: blank(s.organization),
                   status: s.status,
                   submittedAt: s.submittedAt || null,
                   amountReimbursedMinor: parseMoney(s.reimbursedAmount) ?? 0,
@@ -256,6 +256,9 @@ export function CaptureForm({
             <SuggestInput id="trip" values={trips} {...text("trip")} />
           </Field>
         )}
+        <Field label="Organization" hint="Club, employer or group this is for">
+          <SuggestInput id="org" values={orgs} placeholder="India Club, Work…" {...text("organization")} />
+        </Field>
         {(s.type === "payment" || s.type === "expense") && (
           <Field label="Payment method">
             <SuggestInput id="method" values={methods} placeholder="ACH, Visa, Zelle…" {...text("method")} />
@@ -301,9 +304,10 @@ export function CaptureForm({
           </label>
           {s.reimbursable && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Reimbursed by">
-                <SuggestInput id="org" values={orgs} placeholder="Work, India Club…" {...text("organization")} />
-              </Field>
+              <p className="text-sm text-muted sm:col-span-2">
+                Reimbursed by:{" "}
+                <span className="font-medium text-text">{s.organization.trim() || "set Organization above"}</span>
+              </p>
               <Field label="Status">
                 <select className="input" {...text("status")}>
                   {Object.entries(STATUS_LABELS).map(([v, l]) => (

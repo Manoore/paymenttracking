@@ -7,6 +7,7 @@ import { api, ApiError, changePassword, logout } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { User } from "@/lib/types";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const CURRENCIES = ["USD", "INR", "EUR", "GBP", "CAD", "AUD", "SGD", "AED", "JPY"];
 
@@ -232,6 +233,15 @@ export default function ProfilePage() {
           </button>
         }
       />
+      <Section title="Appearance">
+        <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="font-medium">Color theme</p>
+            <p className="text-sm text-muted">System follows your device&apos;s light/dark setting. Saved on this device.</p>
+          </div>
+          <ThemeSwitcher />
+        </div>
+      </Section>
       <ProfileForm user={data.user} onSaved={(u) => setData({ user: u })} />
       <PasswordForm />
     </>

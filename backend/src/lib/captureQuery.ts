@@ -57,6 +57,7 @@ export function buildCaptureFilter(req: Request, f: CaptureFilters): FilterQuery
           { tags: rx },
           { url: rx },
           { "payment.confirmationNumber": rx },
+          { organization: rx },
           { "expense.reimbursement.organization": rx },
           { "deposit.checkNumber": rx },
           { extractedText: rx },
@@ -80,7 +81,10 @@ export function buildCaptureFilter(req: Request, f: CaptureFilters): FilterQuery
   if (f.reimbursable !== undefined) and.push({ "expense.reimbursable": f.reimbursable ? true : { $ne: true } });
   if (f.reimbursementStatus?.length)
     and.push({ "expense.reimbursable": true, "expense.reimbursement.status": { $in: f.reimbursementStatus } });
-  if (f.organization) and.push({ "expense.reimbursement.organization": exactCi(f.organization) });
+  if (f.organization) {
+    const rx = exactCi(f.organization);
+    and.push({ $or: [{ organization: rx }, { organization: { $in: [null, ""] }, "expense.reimbursement.organization": rx }] });
+  }
   if (f.cleared !== undefined) and.push({ type: "deposit", "deposit.cleared": f.cleared ? true : { $ne: true } });
   if (f.hasAttachments !== undefined)
     and.push(f.hasAttachments ? { "attachmentIds.0": { $exists: true } } : { "attachmentIds.0": { $exists: false } });

@@ -18,6 +18,7 @@ import {
   Smartphone,
   Utensils,
 } from "lucide-react";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 export const metadata: Metadata = {
   title: { absolute: "Capture Hub: payment proof, expenses and reimbursements in one private place" },
@@ -135,6 +136,9 @@ export default function WelcomePage() {
             <a href="#privacy" className="btn-ghost hidden sm:inline-flex">
               Privacy
             </a>
+            <span className="hidden md:inline-flex">
+              <ThemeSwitcher compact />
+            </span>
             <Link href="/login" className="btn-primary">
               Sign in
             </Link>

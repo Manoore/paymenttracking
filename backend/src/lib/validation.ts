@@ -34,6 +34,7 @@ export const captureInput = z.object({
   occurredAt: z.coerce.date().nullish(),
   property: optText(200),
   trip: optText(200),
+  organization: optText(200),
   payment: z
     .object({
       method: optText(100),

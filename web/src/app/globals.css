@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* `dark:` utilities follow the resolved theme set by the theme script, not just the OS. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
   --bg: #f6f7f9;
   --surface: #ffffff;
@@ -17,8 +20,9 @@
   --ok-soft: #e3f4ea;
 }
 
+/* Dark palette: follows the OS unless the user picked Light/Dark (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1115;
     --surface: #171a20;
     --surface-2: #1f232b;
@@ -34,6 +38,23 @@
     --ok: #6fd39b;
     --ok-soft: #173024;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1115;
+  --surface: #171a20;
+  --surface-2: #1f232b;
+  --border: #2b303a;
+  --text: #e8eaee;
+  --muted: #9aa2b1;
+  --accent: #7ea2ff;
+  --accent-soft: #1d2842;
+  --danger: #ff8a80;
+  --danger-soft: #3a1c1a;
+  --warn: #f2b660;
+  --warn-soft: #3a2a12;
+  --ok: #6fd39b;
+  --ok-soft: #173024;
 }
 
 @theme inline {
@@ -56,6 +77,11 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {

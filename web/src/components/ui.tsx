@@ -85,7 +85,7 @@ export function StatusBadge({ status }: { status: ReimbursementStatus }) {
 
 export function CaptureRow({ c }: { c: Capture }) {
   const date = c.occurredAt ?? c.createdAt;
-  const meta = [c.counterparty, c.property, c.trip, c.category].filter(Boolean).join(" · ");
+  const meta = [c.counterparty, c.organization ?? c.expense?.reimbursement?.organization, c.property, c.trip, c.category].filter(Boolean).join(" · ");
   return (
     <Link href={`/captures/${c._id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
       <TypeIcon type={c.type} />

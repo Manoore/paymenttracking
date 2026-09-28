@@ -209,6 +209,16 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
             <Detail label="Category" value={c.category} />
             <Detail label="Property" value={c.property} />
             <Detail label="Trip / project" value={c.trip} />
+            <Detail
+              label="Organization"
+              value={
+                (c.organization ?? r?.organization) && (
+                  <Link className="text-accent" href={`/activity?organization=${encodeURIComponent(c.organization ?? r?.organization ?? "")}`}>
+                    {c.organization ?? r?.organization}
+                  </Link>
+                )
+              }
+            />
             <Detail label="Method" value={c.payment?.method ?? c.expense?.paymentMethod} />
             <Detail label="Confirmation #" value={c.payment?.confirmationNumber} />
             <Detail label="Due date" value={formatDate(c.payment?.dueDate)} />
@@ -219,7 +229,6 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
             {c.expense?.reimbursable && r && (
               <>
                 <Detail label="Reimbursement" value={r.status && <StatusBadge status={r.status} />} />
-                <Detail label="Reimbursed by" value={r.organization} />
                 <Detail label="Submitted" value={formatDate(r.submittedAt)} />
                 <Detail label="Amount reimbursed" value={r.amountReimbursedMinor ? formatMoney(r.amountReimbursedMinor, c.currency) : undefined} />
                 <Detail label="Reimbursed on" value={formatDate(r.reimbursedAt)} />

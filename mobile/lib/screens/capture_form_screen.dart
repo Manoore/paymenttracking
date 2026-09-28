@@ -52,7 +52,7 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
     c('confirmation').text = x?.confirmationNumber ?? '';
     c('checkNumber').text = x?.checkNumber ?? '';
     c('bankAccount').text = x?.bankAccount ?? '';
-    c('organization').text = x?.reimbursement?.organization ?? '';
+    c('organization').text = x?.organization ?? '';
     c('reimbursedAmount').text = minorToInput(x?.reimbursement?.amountReimbursedMinor);
     _reimbursable = x?.reimbursable ?? false;
     _status = x?.reimbursement?.status ?? 'to_submit';
@@ -109,6 +109,7 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
       'category': _blank('category'),
       'property': _blank('property'),
       'trip': _blank('trip'),
+      'organization': _blank('organization'),
       'counterparty': _blank('counterparty'),
       'url': _blank('url'),
       'occurredAt': isoDate(_date),
@@ -121,7 +122,6 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
               'reimbursable': _reimbursable,
               'reimbursement': _reimbursable
                   ? {
-                      'organization': _blank('organization'),
                       'status': _status,
                       'amountReimbursedMinor': parseMoney(c('reimbursedAmount').text) ?? 0,
                     }
@@ -238,6 +238,7 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
           _suggestField('category', 'Category', hint: 'HOA, Utilities, Travel…'),
           if (_type == 'payment' || _type == 'expense') _suggestField('property', 'Property', hint: 'e.g. Oak Grove'),
           if (_type != 'deposit') _suggestField('trip', 'Trip / project'),
+          _suggestField('organization', 'Organization', hint: 'India Club, Work…'),
           if (_type == 'payment' || _type == 'expense') _suggestField('method', 'Payment method', hint: 'ACH, Visa, Zelle…'),
           if (_type == 'payment') _field('confirmation', 'Confirmation #'),
           if (_type == 'deposit') ...[
@@ -259,7 +260,13 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
               onChanged: (v) => setState(() => _reimbursable = v),
             ),
             if (_reimbursable) ...[
-              _suggestField('organization', 'Reimbursed by', hint: 'Work, India Club…'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Reimbursed by: ${_blank('organization') ?? 'set Organization above'}',
+                  style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: DropdownButtonFormField<String>(

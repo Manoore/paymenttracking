@@ -261,3 +261,30 @@ describe("profile", () => {
     await request(app).post("/api/v1/auth/login").send({ email: "me@example.com", password: "another-long-password" }).expect(200);
   });
 });
+
+describe("organizations", () => {
+  it("groups by organization case-insensitively across types and in reports", async () => {
+    const { accessToken } = await register();
+    const auth = { Authorization: `Bearer ${accessToken}` };
+    const post = (body: object) => request(app).post("/api/v1/captures").set(auth).send(body).expect(201);
+    await post({ type: "expense", title: "Diwali lights", amountMinor: 5000, organization: "India Club", expense: { reimbursable: true } });
+    // Legacy shape: organization only on the reimbursement.
+    await post({ type: "expense", title: "Sweets", amountMinor: 3000, expense: { reimbursable: true, reimbursement: { organization: "india club " } } });
+    await post({ type: "payment", title: "Club dues", amountMinor: 10000, organization: "INDIA CLUB" });
+
+    const owed = await request(app).get("/api/v1/reimbursements").set(auth).expect(200);
+    expect(owed.body.groups).toHaveLength(1);
+    expect(owed.body.groups[0]).toMatchObject({ outstandingMinor: 8000 });
+
+    const summary = await request(app).get("/api/v1/reports/summary?groupBy=organization").set(auth).expect(200);
+    const total = summary.body.rows.reduce((n: number, r: { totalMinor: number }) => n + r.totalMinor, 0);
+    expect(new Set(summary.body.rows.map((r: { key: string }) => r.key.toLowerCase()))).toEqual(new Set(["india club"]));
+    expect(total).toBe(18000);
+
+    const filtered = await request(app).get("/api/v1/captures?organization=india%20club").set(auth).expect(200);
+    expect(filtered.body.total).toBe(3);
+
+    const sugg = await request(app).get("/api/v1/suggestions?field=organization").set(auth).expect(200);
+    expect(sugg.body.values).toHaveLength(1);
+  });
+});

@@ -87,6 +87,9 @@ const captureSchema = new Schema(
     occurredAt: Date, // paid / spent / deposited / captured date
     property: String,
     trip: String,
+    // Who this relates to / is on behalf of (e.g. "India Club", "Work"). For
+    // reimbursable expenses it is also who pays you back.
+    organization: String,
 
     payment: paymentSchema,
     expense: expenseSchema,
@@ -106,6 +109,7 @@ captureSchema.index({ workspaceId: 1, type: 1, occurredAt: -1 });
 captureSchema.index({ workspaceId: 1, filed: 1 });
 captureSchema.index({ workspaceId: 1, "expense.reimbursable": 1, "expense.reimbursement.status": 1 });
 captureSchema.index({ workspaceId: 1, tags: 1 });
+captureSchema.index({ workspaceId: 1, organization: 1 });
 captureSchema.index(
   {
     title: "text",
@@ -114,6 +118,7 @@ captureSchema.index(
     counterparty: "text",
     property: "text",
     trip: "text",
+    organization: "text",
     category: "text",
     extractedText: "text",
   },

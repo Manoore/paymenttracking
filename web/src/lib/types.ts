@@ -36,6 +36,7 @@ export interface Capture {
   occurredAt?: string;
   property?: string;
   trip?: string;
+  organization?: string;
   payment?: { method?: string; confirmationNumber?: string; scheduleId?: string; dueDate?: string };
   expense?: { project?: string; paymentMethod?: string; reimbursable?: boolean; reimbursement?: Reimbursement };
   deposit?: { checkNumber?: string; bankAccount?: string; cleared?: boolean; clearedAt?: string };

@@ -9,7 +9,7 @@ import { useApi, useDebounced, useSuggestions } from "@/lib/hooks";
 import type { Capture, Paged } from "@/lib/types";
 import { CaptureList, Empty, ErrorNote, Spinner } from "./ui";
 
-const FILTER_KEYS = ["type", "from", "to", "category", "counterparty", "property", "trip", "tag", "reimbursementStatus", "cleared"] as const;
+const FILTER_KEYS = ["type", "from", "to", "category", "counterparty", "property", "trip", "organization", "tag", "reimbursementStatus", "cleared"] as const;
 
 /**
  * Search + filter list backed by URL params, so any filtered view can be
@@ -50,6 +50,7 @@ export function CaptureBrowser({ fixed = {}, showFilters = true }: { fixed?: Rec
   const categories = useSuggestions("category");
   const properties = useSuggestions("property");
   const trips = useSuggestions("trip");
+  const organizations = useSuggestions("organization");
   const counterparties = useSuggestions("counterparty");
 
   const select = (k: string, label: string, options: [string, string][]) => (
@@ -114,6 +115,7 @@ export function CaptureBrowser({ fixed = {}, showFilters = true }: { fixed?: Rec
           {select("counterparty", "Payee / merchant / payer", pairs(counterparties))}
           {select("property", "Property", pairs(properties))}
           {select("trip", "Trip / project", pairs(trips))}
+          {select("organization", "Organization", pairs(organizations))}
           {select("reimbursementStatus", "Reimbursement", Object.entries(STATUS_LABELS))}
           {select("cleared", "Deposit", [
             ["false", "Not cleared"],
