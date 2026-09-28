@@ -9,7 +9,7 @@ import { api, ApiError, changePassword, logout } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { User } from "@/lib/types";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { AccentPicker, ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { ReaderSettings } from "@/components/ReaderSettings";
 
 const CURRENCIES = ["USD", "INR", "EUR", "GBP", "CAD", "AUD", "SGD", "AED", "JPY"];
@@ -393,6 +393,10 @@ export default function ProfilePage() {
             <p className="text-sm text-muted">System follows your device&apos;s light/dark setting. Saved on this device.</p>
           </div>
           <ThemeSwitcher />
+        </div>
+        <div className="card mt-3 p-4">
+          <p className="mb-3 font-medium">Accent colour</p>
+          <AccentPicker />
         </div>
       </Section>
       <ProfileForm user={data.user} onSaved={(u) => setData({ user: u })} />

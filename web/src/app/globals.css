@@ -3,58 +3,152 @@
 /* `dark:` utilities follow the resolved theme set by the theme script, not just the OS. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/*
+ * Colour system
+ * - Neutrals: soft, slightly cool tints instead of flat white/black.
+ * - Accent: one of five palettes (data-accent on <html>), each with a
+ *   gradient partner (--accent-2) and a soft tint.
+ * - Record types: every type has its own colour + soft background so lists
+ *   scan at a glance (payments blue, expenses orange, deposits green, …).
+ */
 :root {
-  --bg: #f6f7f9;
+  --bg: #f4f5fb;
   --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --border: #e3e6eb;
-  --text: #15181d;
-  --muted: #5d6573;
-  --accent: #2456d6;
-  --accent-soft: #e7eefc;
+  --surface-2: #eef0f7;
+  --border: #e2e5ef;
+  --text: #141726;
+  --muted: #5b6275;
+  --shadow: 0 1px 2px rgb(20 23 38 / 0.04), 0 4px 16px rgb(20 23 38 / 0.05);
+
+  --accent: #4f46e5;
+  --accent-2: #7c3aed;
+  --accent-soft: #eceefe;
+  --on-accent: #ffffff;
+
   --danger: #c2332b;
-  --danger-soft: #fbeae8;
+  --danger-soft: #fdecea;
   --warn: #a15c00;
   --warn-soft: #fdf1dd;
-  --ok: #1d7a46;
-  --ok-soft: #e3f4ea;
+  --ok: #178a4c;
+  --ok-soft: #e3f6ea;
+
+  --t-payment: #2563eb;
+  --t-payment-soft: #e8f0fe;
+  --t-expense: #ea580c;
+  --t-expense-soft: #fff0e6;
+  --t-deposit: #16a34a;
+  --t-deposit-soft: #e5f7eb;
+  --t-document: #7c3aed;
+  --t-document-soft: #f1eafe;
+  --t-place: #db2777;
+  --t-place-soft: #fde8f2;
+  --t-idea: #d97706;
+  --t-idea-soft: #fef3dc;
+  --t-note: #0d9488;
+  --t-note-soft: #e0f5f2;
+  --t-link: #0284c7;
+  --t-link-soft: #e1f2fb;
 }
 
-/* Dark palette: follows the OS unless the user picked Light/Dark (data-theme on <html>). */
+:root[data-accent="ocean"] {
+  --accent: #0e7490;
+  --accent-2: #0ea5e9;
+  --accent-soft: #e0f4fa;
+}
+:root[data-accent="sunset"] {
+  --accent: #dc4a2e;
+  --accent-2: #f59e0b;
+  --accent-soft: #fdece6;
+}
+:root[data-accent="grape"] {
+  --accent: #9333ea;
+  --accent-2: #db2777;
+  --accent-soft: #f4eafe;
+}
+:root[data-accent="forest"] {
+  --accent: #15803d;
+  --accent-2: #0d9488;
+  --accent-soft: #e3f5e9;
+}
+
+/* Dark palette: shared by the OS fallback (no script yet) and explicit dark mode. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f1115;
-    --surface: #171a20;
-    --surface-2: #1f232b;
-    --border: #2b303a;
-    --text: #e8eaee;
-    --muted: #9aa2b1;
-    --accent: #7ea2ff;
-    --accent-soft: #1d2842;
+    --bg: #0d0f17;
+    --surface: #151826;
+    --surface-2: #1d2133;
+    --border: #2a2f45;
+    --text: #e9ebf5;
+    --muted: #9aa1b8;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
+    --accent: #8b93ff;
+    --accent-2: #b98cff;
+    --accent-soft: #23264d;
+    --on-accent: #0d0f17;
     --danger: #ff8a80;
-    --danger-soft: #3a1c1a;
+    --danger-soft: #3a1c1c;
     --warn: #f2b660;
     --warn-soft: #3a2a12;
     --ok: #6fd39b;
-    --ok-soft: #173024;
+    --ok-soft: #14301f;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0f1115;
-  --surface: #171a20;
-  --surface-2: #1f232b;
-  --border: #2b303a;
-  --text: #e8eaee;
-  --muted: #9aa2b1;
-  --accent: #7ea2ff;
-  --accent-soft: #1d2842;
+  --bg: #0d0f17;
+  --surface: #151826;
+  --surface-2: #1d2133;
+  --border: #2a2f45;
+  --text: #e9ebf5;
+  --muted: #9aa1b8;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
+  --accent: #8b93ff;
+  --accent-2: #b98cff;
+  --accent-soft: #23264d;
+  --on-accent: #0d0f17;
   --danger: #ff8a80;
-  --danger-soft: #3a1c1a;
+  --danger-soft: #3a1c1c;
   --warn: #f2b660;
   --warn-soft: #3a2a12;
   --ok: #6fd39b;
-  --ok-soft: #173024;
+  --ok-soft: #14301f;
+
+  --t-payment: #7aa7ff;
+  --t-payment-soft: #1b2849;
+  --t-expense: #fb923c;
+  --t-expense-soft: #3a2415;
+  --t-deposit: #4ade80;
+  --t-deposit-soft: #14301f;
+  --t-document: #b794ff;
+  --t-document-soft: #2a1f47;
+  --t-place: #f472b6;
+  --t-place-soft: #3a1a2c;
+  --t-idea: #fbbf24;
+  --t-idea-soft: #3a2c10;
+  --t-note: #2dd4bf;
+  --t-note-soft: #0f302c;
+  --t-link: #38bdf8;
+  --t-link-soft: #0f2a3a;
+}
+:root[data-theme="dark"][data-accent="ocean"] {
+  --accent: #38bdf8;
+  --accent-2: #22d3ee;
+  --accent-soft: #0e2a38;
+}
+:root[data-theme="dark"][data-accent="sunset"] {
+  --accent: #ff8a6b;
+  --accent-2: #fbbf24;
+  --accent-soft: #3a2018;
+}
+:root[data-theme="dark"][data-accent="grape"] {
+  --accent: #c084fc;
+  --accent-2: #f472b6;
+  --accent-soft: #2e1b40;
+}
+:root[data-theme="dark"][data-accent="forest"] {
+  --accent: #4ade80;
+  --accent-2: #2dd4bf;
+  --accent-soft: #13301f;
 }
 
 @theme inline {
@@ -65,7 +159,9 @@
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warn: var(--warn);
@@ -85,19 +181,27 @@ html[data-theme="dark"] {
 }
 
 body {
-  background: var(--bg);
+  /* A faint wash of the accent colour at the top so pages aren't flat white/black. */
+  background:
+    radial-gradient(1200px 500px at 10% -10%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
+    radial-gradient(900px 400px at 100% 0%, color-mix(in srgb, var(--accent-2) 7%, transparent), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
 @utility card {
-  @apply rounded-xl border border-border bg-surface;
+  @apply rounded-2xl border border-border bg-surface;
+  box-shadow: var(--shadow);
 }
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-11;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed min-h-11;
 }
 @utility btn-primary {
-  @apply btn bg-accent text-white hover:opacity-90 dark:text-bg;
+  @apply btn text-on-accent hover:brightness-110 active:brightness-95;
+  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 @utility btn-secondary {
   @apply btn border border-border bg-surface text-text hover:bg-surface-2;
@@ -109,11 +213,16 @@ body {
   @apply btn border border-border bg-surface text-danger hover:bg-danger-soft;
 }
 @utility input {
-  @apply w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-base text-text outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25 sm:text-sm min-h-11;
+  @apply w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-base text-text outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25 sm:text-sm min-h-11;
 }
 @utility label {
   @apply mb-1.5 block text-sm font-medium text-text;
 }
 @utility chip {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+/* Gradient panel used for the Home header and brand mark. */
+@utility bg-hero {
+  background-image: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--on-accent);
 }

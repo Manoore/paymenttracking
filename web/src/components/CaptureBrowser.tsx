@@ -141,7 +141,7 @@ export function CaptureBrowser({ fixed = {}, showFilters = true }: { fixed?: Rec
           <button className="btn-secondary" onClick={() => setOpen(!open)} aria-expanded={open}>
             <SlidersHorizontal size={18} />
             <span className="hidden sm:inline">Filters</span>
-            {activeCount > 0 && <span className="chip bg-accent text-white dark:text-bg">{activeCount}</span>}
+            {activeCount > 0 && <span className="chip bg-accent text-on-accent">{activeCount}</span>}
           </button>
         )}
         <button

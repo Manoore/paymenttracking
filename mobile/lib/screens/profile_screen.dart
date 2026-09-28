@@ -139,6 +139,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SectionTitle('Appearance'),
                 ThemeModePicker(controller: context.read<ThemeController>()),
+                const SizedBox(height: 12),
+                AccentPicker(controller: context.read<ThemeController>()),
                 const SectionTitle('Your info'),
                 TextField(controller: _name, textCapitalization: TextCapitalization.words, decoration: _dec('Name')),
                 const SizedBox(height: 12),

@@ -41,6 +41,15 @@ function isActive(pathname: string, href: string) {
   return path === "/" ? pathname === "/" : pathname.startsWith(path);
 }
 
+/** Gradient app icon used in the sidebar and phone header. */
+function BrandMark({ size = 32 }: { size?: number }) {
+  return (
+    <span className="flex shrink-0 items-center justify-center rounded-xl bg-hero shadow-sm" style={{ width: size, height: size }}>
+      <Inbox size={size * 0.55} strokeWidth={2.2} />
+    </span>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
@@ -83,8 +92,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh md:flex">
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
-        <Link href="/" className="mb-6 px-3 text-lg font-semibold tracking-tight">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-surface/80 px-3 py-5 backdrop-blur md:flex">
+        <Link href="/" className="mb-6 flex items-center gap-2.5 px-2 text-lg font-semibold tracking-tight">
+          <BrandMark />
           Capture Hub
         </Link>
         <SpaceSwitcher />
@@ -97,7 +107,7 @@ function Shell({ children }: { children: React.ReactNode }) {
               key={href}
               href={href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
-                isActive(pathname, href) ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text"
+                isActive(pathname, href) ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-surface-2 hover:text-text"
               }`}
             >
               <Icon size={18} /> {label}
@@ -125,7 +135,8 @@ function Shell({ children }: { children: React.ReactNode }) {
           {multiSpace ? (
             <SpaceSwitcher compact />
           ) : (
-            <Link href="/" className="text-base font-semibold">
+            <Link href="/" className="flex items-center gap-2 text-base font-semibold">
+              <BrandMark size={28} />
               Capture Hub
             </Link>
           )}
@@ -151,7 +162,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <Link
         href="/new"
         aria-label="New capture"
-        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg dark:text-bg md:hidden"
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-hero shadow-lg md:hidden"
       >
         <Plus size={26} />
       </Link>
@@ -165,11 +176,13 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link
             key={href}
             href={href}
-            className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
+            className={`flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium ${
               isActive(pathname, href) ? "text-accent" : "text-muted"
             }`}
           >
-            <Icon size={22} />
+            <span className={`flex h-7 w-12 items-center justify-center rounded-full ${isActive(pathname, href) ? "bg-accent-soft" : ""}`}>
+              <Icon size={20} />
+            </span>
             {label === "Reimbursements" ? "Owed" : label}
           </Link>
         ))}

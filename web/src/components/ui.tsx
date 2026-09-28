@@ -62,17 +62,24 @@ const TYPE_ICON: Record<CaptureType, typeof FileText> = {
   idea: Lightbulb,
 };
 
+/** Each record type has its own colour (see --t-* in globals.css). */
+export const typeColors = (type: CaptureType) => ({ color: `var(--t-${type})`, backgroundColor: `var(--t-${type}-soft)` });
+
 export function TypeIcon({ type, size = 18 }: { type: CaptureType; size?: number }) {
   const Icon = TYPE_ICON[type] ?? FileText;
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={typeColors(type)}>
       <Icon size={size} />
     </span>
   );
 }
 
 export function TypeBadge({ type }: { type: CaptureType }) {
-  return <span className="chip bg-surface-2 text-muted">{TYPE_LABELS[type]}</span>;
+  return (
+    <span className="chip" style={typeColors(type)}>
+      {TYPE_LABELS[type]}
+    </span>
+  );
 }
 
 const STATUS_STYLE: Record<ReimbursementStatus, string> = {

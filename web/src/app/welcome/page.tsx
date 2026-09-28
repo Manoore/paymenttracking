@@ -179,7 +179,7 @@ export default function WelcomePage() {
             <div className="mt-8 grid gap-6 md:grid-cols-3">
               {STEPS.map(({ icon: Icon, title, body }, i) => (
                 <div key={title} className="flex gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white dark:text-bg">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-hero">
                     <Icon size={20} />
                   </span>
                   <div>

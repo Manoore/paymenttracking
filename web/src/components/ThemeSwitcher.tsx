@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { THEME_KEY as KEY, type ThemePref } from "@/lib/theme";
+import { ACCENT_KEY, ACCENTS, THEME_KEY as KEY, type AccentId, type ThemePref } from "@/lib/theme";
 
 function readPref(): ThemePref {
   try {
@@ -57,6 +57,56 @@ export function ThemeSwitcher({ compact = false }: { compact?: boolean }) {
         >
           <Icon size={16} />
           {!compact && label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function applyAccent(id: AccentId) {
+  const root = document.documentElement;
+  if (id === "indigo") root.removeAttribute("data-accent");
+  else root.setAttribute("data-accent", id);
+}
+
+function readAccent(): AccentId {
+  try {
+    const v = localStorage.getItem(ACCENT_KEY);
+    return (ACCENTS.find((a) => a.id === v)?.id ?? "indigo") as AccentId;
+  } catch {
+    return "indigo";
+  }
+}
+
+/** Five colour palettes for buttons, highlights and the Home header. Saved on this device. */
+export function AccentPicker() {
+  const [accent, setAccent] = useState<AccentId>("indigo");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAccent(readAccent());
+  }, []);
+  const choose = (id: AccentId) => {
+    setAccent(id);
+    try {
+      localStorage.setItem(ACCENT_KEY, id);
+    } catch {}
+    applyAccent(id);
+  };
+  return (
+    <div role="radiogroup" aria-label="Accent colour" className="flex flex-wrap gap-2">
+      {ACCENTS.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          role="radio"
+          aria-checked={accent === a.id}
+          onClick={() => choose(a.id)}
+          className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-sm font-medium ${
+            accent === a.id ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-muted hover:text-text"
+          }`}
+        >
+          <span className="h-6 w-6 rounded-full" style={{ backgroundImage: `linear-gradient(135deg, ${a.from}, ${a.to})` }} />
+          {a.label}
         </button>
       ))}
     </div>

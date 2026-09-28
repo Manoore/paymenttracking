@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CheckCircle2, Circle, FileBadge, Inbox, PackageOpen, ShieldCheck } from "lucide-react";
-import { CaptureList, Empty, ErrorNote, PageHeader, Section, Spinner } from "@/components/ui";
+import { AlertTriangle, CalendarClock, Camera, CheckCircle2, Circle, FileBadge, Inbox, MapPin, PackageOpen, Repeat, ShieldCheck } from "lucide-react";
+import { useWorkspace } from "@/components/WorkspaceContext";
+import { CaptureList, Empty, ErrorNote, Section, Spinner } from "@/components/ui";
 import { daysUntil, formatDate, formatMoney, frequencyLabel, relativeDue } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { Dashboard, Schedule } from "@/lib/types";
@@ -71,6 +72,58 @@ function SetupChecklist({ setup }: { setup: Dashboard["setup"] }) {
   );
 }
 
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+/** Colourful welcome panel: greeting, three numbers that matter, and quick actions. */
+function Hero({ data }: { data: Dashboard }) {
+  const { user, workspace, isFamily } = useWorkspace();
+  const week = data.upcoming.filter((s) => daysUntil(s.nextDueDate) <= 7);
+  const dueCount = data.overdue.length + week.length;
+  const owedByCurrency = new Map<string, number>();
+  for (const g of data.reimbursementsOwed) owedByCurrency.set(g.currency, (owedByCurrency.get(g.currency) ?? 0) + g.outstandingMinor);
+  const owed = [...owedByCurrency.entries()].map(([c, m]) => formatMoney(m, c)).join(" + ") || formatMoney(0, workspace?.defaultCurrency ?? "USD");
+  const stats = [
+    { label: data.overdue.length ? `Due · ${data.overdue.length} overdue` : "Due this week", value: String(dueCount), href: "/recurring" },
+    { label: "Owed to you", value: owed, href: "/reimbursements" },
+    { label: "In your inbox", value: String(data.inboxCount), href: "/inbox" },
+  ];
+  const actions = [
+    { href: "/new?type=expense", label: "Snap a receipt", icon: Camera },
+    { href: "/recurring/new", label: "Add a bill", icon: Repeat },
+    { href: "/new?type=place", label: "Save a place", icon: MapPin },
+  ];
+  return (
+    <div className="bg-hero relative mb-8 overflow-hidden rounded-3xl p-5 shadow-lg md:p-7">
+      {/* soft decorative circles */}
+      <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10" />
+      <div className="pointer-events-none absolute -bottom-24 right-24 h-48 w-48 rounded-full bg-white/10" />
+      <p className="relative text-sm opacity-80">{isFamily ? `👪 ${workspace?.name}` : new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</p>
+      <h1 className="relative mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
+        {greeting()}
+        {user?.name ? `, ${user.name.split(" ")[0]}` : ""} 👋
+      </h1>
+      <div className="relative mt-5 grid grid-cols-3 gap-2 md:gap-3">
+        {stats.map((s) => (
+          <Link key={s.label} href={s.href} className="rounded-2xl bg-white/15 p-3 backdrop-blur-sm transition hover:bg-white/25 md:p-4">
+            <p className="truncate text-lg font-semibold tabular-nums md:text-2xl">{s.value}</p>
+            <p className="truncate text-xs opacity-85 md:text-sm">{s.label}</p>
+          </Link>
+        ))}
+      </div>
+      <div className="relative mt-4 flex flex-wrap gap-2">
+        {actions.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-[#141726] shadow-sm hover:bg-white">
+            <Icon size={15} /> {label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, error, loading } = useApi<Dashboard>("/dashboard");
 
@@ -82,7 +135,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Home" subtitle="What needs attention, and what you saved recently." />
+      <Hero data={data} />
 
       <SetupChecklist setup={data.setup} />
 

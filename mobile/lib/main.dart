@@ -94,13 +94,13 @@ class _CaptureHubAppState extends State<CaptureHubApp> {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2456D6);
+    final theme = context.watch<ThemeController>();
     return MaterialApp.router(
       title: 'Capture Hub',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.light),
-      darkTheme: ThemeData(colorSchemeSeed: seed, useMaterial3: true, brightness: Brightness.dark),
-      themeMode: context.watch<ThemeController>().mode,
+      theme: theme.themeFor(Brightness.light),
+      darkTheme: theme.themeFor(Brightness.dark),
+      themeMode: theme.mode,
       routerConfig: _router,
     );
   }

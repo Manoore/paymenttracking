@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'api.dart';
 import 'format.dart';
 import 'models.dart';
+import 'theme.dart';
 
 const typeIcons = {
   'note': Icons.sticky_note_2_outlined,
@@ -81,9 +82,11 @@ class CaptureTile extends StatelessWidget {
         _Chip(c.cleared ? 'Cleared' : 'Not cleared', scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
     ];
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: scheme.surfaceContainerHighest,
-        child: Icon(typeIcons[c.type], color: scheme.onSurfaceVariant, size: 20),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(color: typeColor(context, c.type).withValues(alpha: 0.14), borderRadius: BorderRadius.circular(12)),
+        child: Icon(typeIcons[c.type], color: typeColor(context, c.type), size: 21),
       ),
       title: Row(children: [
         Flexible(child: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis)),

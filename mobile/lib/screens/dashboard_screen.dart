@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../api.dart';
 import '../format.dart';
 import '../models.dart';
+import '../theme.dart';
 import '../widgets.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -63,6 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return ListView(
             padding: const EdgeInsets.only(bottom: 96),
             children: [
+              _Hero(d: d, onReturn: reload),
               if (api.isFamily)
                 Card(
                   margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -145,6 +147,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+
+/// Colourful welcome panel: greeting, three numbers that matter, quick actions.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.d, required this.onReturn});
+  final Dashboard d;
+  final Future<void> Function() onReturn;
+
+  @override
+  Widget build(BuildContext context) {
+    final api = context.watch<Api>();
+    final theme = context.watch<ThemeController>();
+    final h = DateTime.now().hour;
+    final hello = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    final first = (api.user?['name'] as String? ?? '').split(' ').first;
+    final dueWeek = d.overdue.length + d.upcoming.where((s) => daysUntil(s.nextDueDate) <= 7).length;
+    final owed = <String, int>{};
+    for (final g in d.owed) {
+      owed[g.currency] = (owed[g.currency] ?? 0) + g.outstandingMinor;
+    }
+    final owedText = owed.isEmpty ? formatMoney(0) : owed.entries.map((e) => formatMoney(e.value, e.key)).join(' + ');
+    const white = Colors.white;
+
+    Widget stat(String value, String label, String route) => Expanded(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => context.go(route),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(16)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: white, fontSize: 18, fontWeight: FontWeight.w700)),
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: white.withValues(alpha: 0.85), fontSize: 12)),
+              ]),
+            ),
+          ),
+        );
+
+    Widget action(IconData icon, String label, String route) => ActionChip(
+          avatar: Icon(icon, size: 16, color: const Color(0xFF141726)),
+          label: Text(label, style: const TextStyle(color: Color(0xFF141726), fontWeight: FontWeight.w500)),
+          backgroundColor: white.withValues(alpha: 0.92),
+          side: BorderSide.none,
+          onPressed: () async {
+            await context.push(route);
+            onReturn();
+          },
+        );
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.all(18),
+      decoration: heroDecoration(theme),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (api.isFamily)
+          Text('👪 ${api.workspace?['name']}', style: TextStyle(color: white.withValues(alpha: 0.85), fontSize: 13)),
+        Text('$hello${first.isEmpty ? '' : ', $first'} 👋',
+            style: const TextStyle(color: white, fontSize: 24, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 14),
+        Row(children: [
+          stat('$dueWeek', d.overdue.isNotEmpty ? 'Due · ${d.overdue.length} overdue' : 'Due this week', '/recurring'),
+          const SizedBox(width: 8),
+          stat(owedText, 'Owed to you', '/owed'),
+          const SizedBox(width: 8),
+          stat('${d.inboxCount}', 'In your inbox', '/activity'),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 4, children: [
+          action(Icons.photo_camera_outlined, 'Snap a receipt', '/new?type=expense'),
+          action(Icons.repeat, 'Add a bill', '/recurring/new'),
+          action(Icons.place_outlined, 'Save a place', '/new?type=place'),
+        ]),
+      ]),
     );
   }
 }
