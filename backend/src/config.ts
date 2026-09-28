@@ -29,10 +29,11 @@ if (!parsed.success) {
 
 export const config = {
   ...parsed.data,
-  // Forgive common copy/paste slips: quotes, spaces, trailing slashes, upper case.
+  // Forgive common copy/paste slips: quotes, spaces, trailing slashes, upper case, missing scheme.
   corsOrigins: parsed.data.CORS_ORIGINS.split(",")
     .map((s) => s.trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "").toLowerCase())
-    .filter(Boolean),
+    .filter(Boolean)
+    .map((s) => (/^https?:\/\//.test(s) ? s : `${s.startsWith("localhost") ? "http" : "https"}://${s}`)),
   allowSignup: parsed.data.ALLOW_SIGNUP === "true",
   isProd: parsed.data.NODE_ENV === "production",
 };
