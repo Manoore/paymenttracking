@@ -113,3 +113,32 @@ describe("calendar feed", () => {
     await request(app).get(path).expect(404);
   });
 });
+
+describe("saved properties", () => {
+  it("adds, merges with record names, renames everywhere and suggests", async () => {
+    const { auth, post } = await session();
+    const created = await request(app)
+      .post("/api/v1/properties")
+      .set(auth)
+      .send({ name: "Oak Grove (Unit 2)", address: "12 Oak Grove Ct, San Jose" })
+      .expect(201);
+    await request(app).post("/api/v1/properties").set(auth).send({ name: "oak grove (unit 2)" }).expect(409);
+    await post({ type: "payment", title: "HOA", amountMinor: 32500, property: "oak grove (unit 2)" });
+
+    let list = await request(app).get("/api/v1/properties").set(auth).expect(200);
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.items[0]).toMatchObject({ name: "Oak Grove (Unit 2)", address: "12 Oak Grove Ct, San Jose", count: 1 });
+
+    await request(app).patch(`/api/v1/properties/${created.body.id}`).set(auth).send({ name: "Oak Grove Home" }).expect(200);
+    const renamed = await request(app).get("/api/v1/captures?property=Oak%20Grove%20Home").set(auth).expect(200);
+    expect(renamed.body.total).toBe(1);
+
+    const sugg = await request(app).get("/api/v1/suggestions?field=property").set(auth).expect(200);
+    expect(sugg.body.values).toEqual(["Oak Grove Home"]);
+
+    await request(app).delete(`/api/v1/properties/${created.body.id}`).set(auth).expect(204);
+    list = await request(app).get("/api/v1/properties").set(auth).expect(200);
+    expect(list.body.items[0]).toMatchObject({ name: "Oak Grove Home", count: 1 }); // records keep the name
+    expect(list.body.items[0].id).toBeUndefined();
+  });
+});

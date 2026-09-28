@@ -42,7 +42,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (api.isFamily)
             IconButton(tooltip: 'Household', icon: const Icon(Icons.event_available_outlined), onPressed: () => context.push('/household')),
           IconButton(tooltip: 'Inbox', icon: const Icon(Icons.inbox_outlined), onPressed: () => context.push('/inbox')),
-          IconButton(tooltip: 'Profile', icon: const Icon(Icons.account_circle_outlined), onPressed: () => context.push('/profile')),
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            onSelected: (route) => context.push(route),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: '/properties', child: ListTile(leading: Icon(Icons.home_work_outlined), title: Text('Properties'))),
+              PopupMenuItem(value: '/family', child: ListTile(leading: Icon(Icons.family_restroom), title: Text('Family & sharing'))),
+              PopupMenuItem(value: '/profile', child: ListTile(leading: Icon(Icons.account_circle_outlined), title: Text('Profile'))),
+            ],
+          ),
         ],
       ),
       body: AsyncView<Dashboard>(

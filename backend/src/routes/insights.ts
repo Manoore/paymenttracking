@@ -2,10 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { buildCaptureFilter, captureFilters } from "../lib/captureQuery.js";
 import { formatMinor, toCsv } from "../lib/csv.js";
-import { notFound } from "../lib/errors.js";
+import { HttpError, notFound } from "../lib/errors.js";
 import { addDays, startOfUtcDay } from "../lib/recurrence.js";
-import { ctx, scope } from "../middleware/auth.js";
+import { ctx, requireWrite, scope } from "../middleware/auth.js";
 import { Capture } from "../models/Capture.js";
+import { Property } from "../models/Property.js";
 import { Membership, User } from "../models/identity.js";
 import { Notification, RecurringSchedule } from "../models/RecurringSchedule.js";
 
@@ -237,6 +238,7 @@ insightsRouter.get("/suggestions", async (req, res) => {
   const field = z.enum(Object.keys(SUGGEST_FIELDS) as [keyof typeof SUGGEST_FIELDS]).parse(req.query.field);
   const paths = field === "organization" ? ["organization", "expense.reimbursement.organization"] : [SUGGEST_FIELDS[field]];
   const values = (await Promise.all(paths.map((p) => Capture.distinct(p, scope(req))))).flat() as unknown[];
+  if (field === "property") values.unshift(...(await Property.distinct("name", { workspaceId: ctx(req).workspaceId })));
   // One suggestion per name regardless of case, so "India Club" isn't offered next to "india club".
   const byKey = new Map<string, string>();
   for (const v of values) {
@@ -261,10 +263,25 @@ insightsRouter.post("/notifications/:id/read", async (req, res) => {
   res.status(204).end();
 });
 
-/** Every property you've recorded, with totals, for the Properties page. */
+type PropertyRow = {
+  id?: string;
+  name: string;
+  address?: string;
+  notes?: string;
+  count: number;
+  lastAt?: Date;
+  totals: { currency: string; totalMinor: number }[];
+  schedules: number;
+};
+
+/**
+ * Every property: ones you added on the Properties page plus any name used on a
+ * record or recurring bill, merged case-insensitively, with totals.
+ */
 insightsRouter.get("/properties", async (req, res) => {
   const { workspaceId } = ctx(req);
-  const [rows, schedules] = await Promise.all([
+  const [saved, rows, schedules] = await Promise.all([
+    Property.find({ workspaceId }).sort({ name: 1 }).lean(),
     Capture.aggregate([
       { $match: { $and: [scope(req), { property: { $nin: [null, ""] } }] } },
       {
@@ -276,25 +293,73 @@ insightsRouter.get("/properties", async (req, res) => {
           lastAt: { $max: { $ifNull: ["$occurredAt", "$createdAt"] } },
         },
       },
-      { $sort: { lastAt: -1 } },
     ]),
     RecurringSchedule.find({ workspaceId, active: true, property: { $nin: [null, ""] } }).lean(),
   ]);
-  const byKey = new Map<string, { name: string; count: number; lastAt: Date; totals: { currency: string; totalMinor: number }[]; schedules: number }>();
+  const byKey = new Map<string, PropertyRow>();
+  const row = (key: string, name: string) => {
+    let cur = byKey.get(key);
+    if (!cur) {
+      cur = { name, count: 0, totals: [], schedules: 0 };
+      byKey.set(key, cur);
+    }
+    return cur;
+  };
+  for (const p of saved) Object.assign(row(p.key, p.name), { id: String(p._id), address: p.address, notes: p.notes });
   for (const r of rows) {
-    const cur = byKey.get(r._id.key) ?? { name: label(r.name, "(none)"), count: 0, lastAt: r.lastAt as Date, totals: [] as { currency: string; totalMinor: number }[], schedules: 0 };
+    const cur = row(r._id.key, label(r.name, "(none)"));
     cur.count += r.count;
     cur.totals.push({ currency: r._id.currency, totalMinor: r.totalMinor });
-    if (r.lastAt > cur.lastAt) cur.lastAt = r.lastAt;
-    byKey.set(r._id.key, cur);
+    if (!cur.lastAt || r.lastAt > cur.lastAt) cur.lastAt = r.lastAt;
   }
-  for (const s of schedules) {
-    const key = s.property!.trim().toLowerCase();
-    const cur = byKey.get(key) ?? { name: s.property!, count: 0, lastAt: s.createdAt as Date, totals: [] as { currency: string; totalMinor: number }[], schedules: 0 };
-    cur.schedules++;
-    byKey.set(key, cur);
+  for (const sc of schedules) row(sc.property!.trim().toLowerCase(), sc.property!.trim()).schedules++;
+  const items = [...byKey.values()].sort(
+    (a, b) => (b.lastAt?.getTime() ?? 0) - (a.lastAt?.getTime() ?? 0) || a.name.localeCompare(b.name),
+  );
+  res.json({ items });
+});
+
+const propertyInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  address: z.string().trim().max(500).nullish(),
+  notes: z.string().trim().max(5000).nullish(),
+});
+
+insightsRouter.post("/properties", requireWrite, async (req, res) => {
+  const body = propertyInput.parse(req.body);
+  const { workspaceId, userId } = ctx(req);
+  const key = body.name.toLowerCase();
+  if (await Property.exists({ workspaceId, key })) throw new HttpError(409, `"${body.name}" already exists`, "duplicate");
+  const p = await Property.create({ ...body, address: body.address || undefined, notes: body.notes || undefined, key, workspaceId, createdBy: userId });
+  res.status(201).json({ id: p._id, name: p.name, address: p.address, notes: p.notes });
+});
+
+/** Edit a saved property. Renaming also renames it on every record and recurring bill. */
+insightsRouter.patch("/properties/:id", requireWrite, async (req, res) => {
+  const body = propertyInput.partial().parse(req.body);
+  const { workspaceId } = ctx(req);
+  const p = await Property.findOne({ _id: String(req.params.id), workspaceId });
+  if (!p) throw notFound("Property");
+  if (body.name && body.name.toLowerCase() !== p.key) {
+    const newKey = body.name.toLowerCase();
+    if (await Property.exists({ workspaceId, key: newKey })) throw new HttpError(409, `"${body.name}" already exists`, "duplicate");
+    const old = new RegExp(`^\\s*${p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+    await Capture.updateMany({ workspaceId, property: old }, { property: body.name });
+    await RecurringSchedule.updateMany({ workspaceId, property: old }, { property: body.name });
+    p.name = body.name;
+    p.key = newKey;
   }
-  res.json({ items: [...byKey.values()] });
+  if (body.address !== undefined) p.set("address", body.address || undefined);
+  if (body.notes !== undefined) p.set("notes", body.notes || undefined);
+  await p.save();
+  res.json({ id: p._id, name: p.name, address: p.address, notes: p.notes });
+});
+
+/** Removes the saved details only; records keep their property name. */
+insightsRouter.delete("/properties/:id", requireWrite, async (req, res) => {
+  const r = await Property.deleteOne({ _id: String(req.params.id), workspaceId: ctx(req).workspaceId });
+  if (!r.deletedCount) throw notFound("Property");
+  res.status(204).end();
 });
 
 /**

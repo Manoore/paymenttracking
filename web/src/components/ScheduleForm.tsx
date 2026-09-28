@@ -18,7 +18,7 @@ const FREQS = [
   { label: "Every 2 weeks", unit: "week", interval: 2 },
 ] as const;
 
-export function ScheduleForm({ schedule, onSaved }: { schedule?: Schedule; onSaved?: () => void }) {
+export function ScheduleForm({ schedule, onSaved, initialProperty }: { schedule?: Schedule; onSaved?: () => void; initialProperty?: string }) {
   const router = useRouter();
   const [s, setS] = useState({
     title: schedule?.title ?? "",
@@ -26,7 +26,7 @@ export function ScheduleForm({ schedule, onSaved }: { schedule?: Schedule; onSav
     amount: minorToInput(schedule?.amountMinor),
     currency: schedule?.currency ?? "USD",
     category: schedule?.category ?? "",
-    property: schedule?.property ?? "",
+    property: schedule?.property ?? initialProperty ?? "",
     method: schedule?.method ?? "",
     notes: schedule?.notes ?? "",
     freq: String(

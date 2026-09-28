@@ -13,9 +13,10 @@ const _counterpartyLabel = {'payment': 'Paid to', 'expense': 'Merchant', 'deposi
 
 /// Create a new capture, or edit/file an existing one (when [capture] is set).
 class CaptureFormScreen extends StatefulWidget {
-  const CaptureFormScreen({super.key, this.capture, this.initialType});
+  const CaptureFormScreen({super.key, this.capture, this.initialType, this.initialProperty});
   final Capture? capture;
   final String? initialType;
+  final String? initialProperty;
   @override
   State<CaptureFormScreen> createState() => _CaptureFormScreenState();
 }
@@ -52,7 +53,7 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
     c('currency').text = x?.currency ?? 'USD';
     c('counterparty').text = x?.counterparty ?? '';
     c('category').text = x?.category ?? '';
-    c('property').text = x?.property ?? '';
+    c('property').text = x?.property ?? widget.initialProperty ?? '';
     c('trip').text = x?.trip ?? '';
     c('tags').text = x?.tags.join(', ') ?? '';
     c('notes').text = x?.notes ?? '';

@@ -336,7 +336,8 @@ class _PaySheetState extends State<_PaySheet> {
 }
 
 class ScheduleFormScreen extends StatefulWidget {
-  const ScheduleFormScreen({super.key});
+  const ScheduleFormScreen({super.key, this.initialProperty});
+  final String? initialProperty;
   @override
   State<ScheduleFormScreen> createState() => _ScheduleFormScreenState();
 }
@@ -353,7 +354,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
   final _title = TextEditingController();
   final _counterparty = TextEditingController();
   final _amount = TextEditingController();
-  final _property = TextEditingController();
+  late final _property = TextEditingController(text: widget.initialProperty ?? '');
   final _category = TextEditingController();
   final _notes = TextEditingController();
   int _freq = 0;

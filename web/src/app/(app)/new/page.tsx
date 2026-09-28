@@ -17,6 +17,7 @@ function NewCapture() {
     ...(type && TYPES.includes(type) ? { type: type as CaptureType } : {}),
     ...(params.get("title") ? { title: params.get("title")! } : {}),
     ...(params.get("text") ? { notes: params.get("text")! } : {}),
+    ...(params.get("property") ? { property: params.get("property")! } : {}),
     ...(sharedUrl ? { url: sharedUrl, type: (type as CaptureType) ?? "link" } : {}),
   };
   return <CaptureForm prefill={prefill} />;
