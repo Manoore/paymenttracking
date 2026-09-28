@@ -200,7 +200,7 @@ export function AttachmentPanel({
           ))}
         </div>
       )}
-      {readError && <p className="mb-3 text-sm text-danger">{readError}</p>}
+      {readError && <p className="mb-3 text-sm text-danger [overflow-wrap:anywhere]">{readError}</p>}
       {attachments
         .filter((a) => a.extraction?.fields)
         .slice(0, 1)
