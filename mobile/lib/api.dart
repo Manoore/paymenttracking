@@ -31,6 +31,7 @@ class Api extends ChangeNotifier {
       InterceptorsWrapper(
         onRequest: (options, handler) {
           if (_accessToken != null) options.headers['Authorization'] = 'Bearer $_accessToken';
+          if (workspaceId != null) options.headers['X-Workspace-Id'] = workspaceId;
           handler.next(options);
         },
         onError: (e, handler) async {
@@ -52,6 +53,7 @@ class Api extends ChangeNotifier {
   }
 
   static const _refreshKey = 'refresh_token';
+  static const _workspaceKey = 'workspace_id';
   final _storage = const FlutterSecureStorage();
   final _dio = Dio(BaseOptions(
     baseUrl: '$apiUrl/api/v1',
@@ -63,6 +65,57 @@ class Api extends ChangeNotifier {
   Future<bool>? _refreshing;
   Map<String, dynamic>? user;
 
+  /// Active space (personal or family). null = the account's default.
+  String? workspaceId;
+
+  /// Members of the active space: [{userId, name, email, role}].
+  List<Map<String, dynamic>> members = const [];
+
+  List<Map<String, dynamic>> get workspaces => ((user?['workspaces'] as List?) ?? const []).cast<Map<String, dynamic>>();
+
+  Map<String, dynamic>? get workspace {
+    final id = workspaceId ?? user?['defaultWorkspaceId'];
+    for (final w in workspaces) {
+      if (w['id'] == id) return w;
+    }
+    return workspaces.isEmpty ? null : workspaces.first;
+  }
+
+  bool get isFamily => workspace?['kind'] == 'family';
+  bool get canWrite => workspace?['role'] != 'viewer';
+  String? get myId => user?['id'] as String?;
+
+  String? nameOf(String? userId) {
+    for (final m in members) {
+      if (m['userId'] == userId) return m['name'] as String?;
+    }
+    return null;
+  }
+
+  /// Reload profile + members (after login, switching spaces, joining a family).
+  Future<void> refreshContext() async {
+    try {
+      user = (await get('/auth/me'))['user'] as Map<String, dynamic>;
+      final ids = workspaces.map((w) => w['id']).toSet();
+      if (workspaceId != null && !ids.contains(workspaceId)) {
+        workspaceId = null;
+        await _storage.delete(key: _workspaceKey);
+      }
+      members = (((await get('/workspaces/current/members'))['members'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> switchWorkspace(String? id) async {
+    workspaceId = id;
+    if (id == null) {
+      await _storage.delete(key: _workspaceKey);
+    } else {
+      await _storage.write(key: _workspaceKey, value: id);
+    }
+    await refreshContext();
+  }
+
   bool get signedIn => user != null;
 
   String fileUrl(String? relative) => relative == null ? '' : '$apiUrl$relative';
@@ -70,14 +123,8 @@ class Api extends ChangeNotifier {
   /// On app start: try to resume the session from the stored refresh token.
   Future<void> restore() async {
     if (await _storage.read(key: _refreshKey) == null) return;
-    if (await _refresh()) {
-      try {
-        user = (await get('/auth/me'))['user'] as Map<String, dynamic>;
-      } catch (_) {
-        user = null;
-      }
-      notifyListeners();
-    }
+    workspaceId = await _storage.read(key: _workspaceKey);
+    if (await _refresh()) await refreshContext();
   }
 
   // Single-flight refresh: the backend rotates refresh tokens on every use.
@@ -108,15 +155,34 @@ class Api extends ChangeNotifier {
 
   Future<void> login(String email, String password) => _session('/auth/login', {'email': email, 'password': password});
 
-  Future<void> register(String name, String email, String password) =>
-      _session('/auth/register', {'name': name, 'email': email, 'password': password});
+  Future<void> register(String name, String email, String password, {String? inviteToken}) => _session('/auth/register', {
+        'name': name,
+        'email': email,
+        'password': password,
+        'inviteToken': ?inviteToken,
+      });
+
+  /// Accepts a family invite (full link or just the token) for the signed-in user.
+  Future<void> acceptInvite(String linkOrToken) async {
+    final token = inviteTokenFrom(linkOrToken);
+    final r = await post('/invites/$token/accept') as Map<String, dynamic>;
+    await switchWorkspace(r['workspaceId'] as String?);
+  }
+
+  static String inviteTokenFrom(String linkOrToken) {
+    final t = linkOrToken.trim();
+    final i = t.lastIndexOf('/invite/');
+    return (i >= 0 ? t.substring(i + 8) : t).split(RegExp(r'[?#/]')).first;
+  }
 
   Future<void> _session(String path, Map<String, dynamic> body) async {
     final data = await post(path, body);
     _accessToken = data['accessToken'] as String;
     await _storage.write(key: _refreshKey, value: data['refreshToken'] as String);
     user = data['user'] as Map<String, dynamic>;
-    notifyListeners();
+    workspaceId = null;
+    await _storage.delete(key: _workspaceKey);
+    await refreshContext();
   }
 
   /// Changing the password revokes every session; store the fresh one for this device.
@@ -139,6 +205,9 @@ class Api extends ChangeNotifier {
   Future<void> _clear() async {
     _accessToken = null;
     user = null;
+    members = const [];
+    workspaceId = null;
+    await _storage.delete(key: _workspaceKey);
     await _storage.delete(key: _refreshKey);
     notifyListeners();
   }
@@ -151,6 +220,10 @@ class Api extends ChangeNotifier {
       final status = e.response?.statusCode;
       if (status == 401 && signedIn) await _clear();
       final data = e.response?.data;
+      // Removed from the selected space: fall back to the default one (not for read-only 403s).
+      if (status == 403 && workspaceId != null && data is Map && (data['error'] as Map?)?['code'] == 'not_member') {
+        await switchWorkspace(null);
+      }
       String? msg;
       if (data is Map) {
         final err = data['error'];

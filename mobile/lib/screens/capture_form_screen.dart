@@ -33,6 +33,8 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
   String _docKind = 'other';
   bool _visited = false;
   String _ideaStatus = 'want';
+  String? _paidBy;
+  bool _private = false;
   final List<PickedUpload> _files = [];
   bool _saving = false;
   Map<String, List<String>> _suggest = {};
@@ -70,6 +72,8 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
     _docKind = x?.docKind ?? 'other';
     _visited = x?.visited ?? false;
     _ideaStatus = x?.ideaStatus ?? 'want';
+    _paidBy = x?.paidBy;
+    _private = x?.isPrivate ?? false;
     c('docReference').text = x?.docReference ?? '';
     c('address').text = x?.address ?? '';
     c('mapUrl').text = x?.mapUrl ?? '';
@@ -160,6 +164,8 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
           : null,
       'place': _type == 'place' ? {'address': _blank('address'), 'mapUrl': _blank('mapUrl'), 'visited': _visited} : null,
       'idea': _type == 'idea' ? {'status': _ideaStatus} : null,
+      'paidBy': _purchase.contains(_type) ? _paidBy : null,
+      'visibility': _private ? 'private' : 'workspace',
       'deposit': _type == 'deposit'
           ? {'checkNumber': _blank('checkNumber'), 'bankAccount': _blank('bankAccount'), 'cleared': _cleared}
           : null,
@@ -236,6 +242,7 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final api = context.watch<Api>();
     final isNew = widget.capture == null;
     final isFinance = _finance.contains(_type);
     return Scaffold(
@@ -379,6 +386,27 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
                 _field('reimbursedAmount', 'Amount reimbursed', keyboard: const TextInputType.numberWithOptions(decimal: true)),
             ],
           ],
+          if (api.isFamily && _purchase.contains(_type))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<String>(
+                initialValue: _paidBy ?? api.myId,
+                decoration: const InputDecoration(labelText: 'Paid by', border: OutlineInputBorder()),
+                items: [
+                  for (final m in api.members)
+                    DropdownMenuItem(value: m['userId'] as String, child: Text('${m['name']}${m['userId'] == api.myId ? ' (me)' : ''}')),
+                ],
+                onChanged: (v) => setState(() => _paidBy = v),
+              ),
+            ),
+          if (api.isFamily)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Only me'),
+              subtitle: Text('Hide this from others in ${api.workspace?['name']}'),
+              value: _private,
+              onChanged: (v) => setState(() => _private = v),
+            ),
           _field('tags', 'Tags', hint: 'Comma separated'),
           _field('notes', 'Notes', maxLines: 4),
         ],

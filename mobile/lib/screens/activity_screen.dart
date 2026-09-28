@@ -26,6 +26,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
   bool _loading = false;
   String? _error;
   int _seq = 0;
+  Object? _workspace;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload when the user switches between personal and family spaces.
+    final ws = context.watch<Api>().workspace?['id'];
+    if (_workspace != null && ws != _workspace) _load(reset: true);
+    _workspace = ws;
+  }
 
   @override
   void initState() {

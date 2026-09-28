@@ -106,6 +106,8 @@ class Capture {
         rating = _int(j['place']?['rating']),
         ideaStatus = j['idea']?['status'] as String?,
         attachmentCount = ((j['attachmentIds'] as List?) ?? const []).length,
+        paidBy = (j['paidBy'] ?? (j['type'] == 'payment' || j['type'] == 'expense' ? j['createdBy'] : null)) as String?,
+        isPrivate = j['visibility'] == 'private',
         attachments = ((j['attachments'] as List?) ?? const [])
             .map((a) => Attachment.fromJson((a as Map).cast<String, dynamic>()))
             .toList();
@@ -146,6 +148,8 @@ class Capture {
   final int? rating;
   final String? ideaStatus;
   final int attachmentCount;
+  final String? paidBy;
+  final bool isPrivate;
   final List<Attachment> attachments;
 
   DateTime get date => occurredAt ?? createdAt;
@@ -167,6 +171,9 @@ class Schedule {
         nextDueDate = _date(j['nextDueDate'])!,
         reminderDaysBefore = _int(j['reminderDaysBefore']) ?? 3,
         active = j['active'] as bool? ?? true,
+        claimedBy = j['claimedBy'] as String?,
+        lastPaidBy = j['lastPaidBy'] as String?,
+        lastPaidAt = _date(j['lastPaidAt']),
         history = ((j['history'] as List?) ?? const [])
             .map((c) => Capture.fromJson((c as Map).cast<String, dynamic>()))
             .toList();
@@ -185,6 +192,9 @@ class Schedule {
   final DateTime nextDueDate;
   final int reminderDaysBefore;
   final bool active;
+  final String? claimedBy;
+  final String? lastPaidBy;
+  final DateTime? lastPaidAt;
   final List<Capture> history;
 }
 

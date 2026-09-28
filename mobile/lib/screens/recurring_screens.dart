@@ -14,11 +14,11 @@ class RecurringListScreen extends StatefulWidget {
 }
 
 class _RecurringListScreenState extends State<RecurringListScreen> {
-  final _view = GlobalKey<AsyncViewState<List<Schedule>>>();
+  int _version = 0;
 
   @override
   Widget build(BuildContext context) {
-    final api = context.read<Api>();
+    final api = context.watch<Api>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Recurring payments'),
@@ -28,13 +28,13 @@ class _RecurringListScreenState extends State<RecurringListScreen> {
             icon: const Icon(Icons.add_alarm_outlined),
             onPressed: () async {
               await context.push('/recurring/new');
-              _view.currentState?.reload();
+              setState(() => _version++);
             },
           ),
         ],
       ),
       body: AsyncView<List<Schedule>>(
-        key: _view,
+        key: ValueKey('rec-${api.workspace?['id']}-$_version'),
         load: () async {
           final data = await api.get('/recurring') as Map<String, dynamic>;
           return (data['items'] as List).map((s) => Schedule.fromJson((s as Map).cast<String, dynamic>())).toList();
@@ -56,9 +56,11 @@ class _RecurringListScreenState extends State<RecurringListScreen> {
               return ListTile(
                 title: Text(s.title),
                 subtitle: Text(
-                  '${frequencyLabel(s.unit, s.interval)} · ${relativeDue(s.nextDueDate)} (${formatDate(s.nextDueDate)})',
+                  '${frequencyLabel(s.unit, s.interval)} · ${relativeDue(s.nextDueDate)} (${formatDate(s.nextDueDate)})'
+                  '${api.isFamily && s.claimedBy != null ? '\n✋ ${s.claimedBy == api.myId ? 'You are' : '${api.nameOf(s.claimedBy) ?? 'Someone'} is'} paying this' : ''}',
                   style: TextStyle(color: overdue ? scheme.error : null),
                 ),
+                isThreeLine: api.isFamily && s.claimedBy != null,
                 trailing: Text(formatMoney(s.amountMinor, s.currency), style: const TextStyle(fontWeight: FontWeight.w600)),
                 onTap: () async {
                   await context.push('/recurring/${s.id}');
@@ -74,14 +76,30 @@ class _RecurringListScreenState extends State<RecurringListScreen> {
 }
 
 class ScheduleDetailScreen extends StatefulWidget {
-  const ScheduleDetailScreen({super.key, required this.id});
+  const ScheduleDetailScreen({super.key, required this.id, this.openPay = false});
   final String id;
+  final bool openPay;
   @override
   State<ScheduleDetailScreen> createState() => _ScheduleDetailScreenState();
 }
 
 class _ScheduleDetailScreenState extends State<ScheduleDetailScreen> {
   final _view = GlobalKey<AsyncViewState<Schedule>>();
+  bool _payOpened = false;
+
+  Future<void> _claim(Schedule s, {bool release = false}) async {
+    final api = context.read<Api>();
+    try {
+      if (release) {
+        await api.delete('/recurring/${s.id}/claim');
+      } else {
+        await api.post('/recurring/${s.id}/claim');
+      }
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+    _view.currentState?.reload();
+  }
 
   Future<void> _pay(Schedule s) async {
     final paid = await showModalBottomSheet<bool>(
@@ -120,6 +138,10 @@ class _ScheduleDetailScreenState extends State<ScheduleDetailScreen> {
       load: () async => Schedule.fromJson(await api.get('/recurring/${widget.id}') as Map<String, dynamic>),
       builder: (context, s, reload) {
         final overdue = daysUntil(s.nextDueDate) < 0;
+        if (widget.openPay && !_payOpened && s.active) {
+          _payOpened = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _pay(s));
+        }
         final scheme = Theme.of(context).colorScheme;
         return Scaffold(
           appBar: AppBar(title: Text(s.title)),
@@ -143,6 +165,25 @@ class _ScheduleDetailScreenState extends State<ScheduleDetailScreen> {
                   ]),
                 ),
               ),
+              if (api.isFamily && s.active)
+                Card(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  color: s.claimedBy != null ? scheme.primaryContainer : null,
+                  child: ListTile(
+                    leading: const Icon(Icons.pan_tool_outlined),
+                    title: Text(s.claimedBy != null
+                        ? '${s.claimedBy == api.myId ? 'You are' : '${api.nameOf(s.claimedBy) ?? 'Someone'} is'} paying this one'
+                        : 'Nobody has said they are paying this yet'),
+                    subtitle: s.lastPaidAt == null
+                        ? null
+                        : Text('Last paid ${formatDate(s.lastPaidAt)}${s.lastPaidBy != null ? ' by ${api.nameOf(s.lastPaidBy) ?? 'a member'}' : ''}'),
+                    trailing: s.claimedBy == null
+                        ? TextButton(onPressed: () => _claim(s), child: const Text("I'm paying"))
+                        : s.claimedBy == api.myId
+                            ? TextButton(onPressed: () => _claim(s, release: true), child: const Text('Release'))
+                            : null,
+                  ),
+                ),
               if (s.active)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -193,6 +234,7 @@ class _PaySheetState extends State<_PaySheet> {
   late final _method = TextEditingController(text: widget.schedule.method ?? '');
   final _confirmation = TextEditingController();
   DateTime _paidAt = todayUtc();
+  String? _paidBy;
   final List<PickedUpload> _files = [];
   bool _busy = false;
 
@@ -215,6 +257,7 @@ class _PaySheetState extends State<_PaySheet> {
         if (_method.text.trim().isNotEmpty) 'method': _method.text.trim(),
         if (_confirmation.text.trim().isNotEmpty) 'confirmationNumber': _confirmation.text.trim(),
         'attachmentIds': uploaded.map((a) => a['_id']).toList(),
+        if (api.isFamily && _paidBy != null) 'paidBy': _paidBy,
       });
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -252,6 +295,21 @@ class _PaySheetState extends State<_PaySheet> {
           TextField(controller: _method, decoration: const InputDecoration(labelText: 'Method', border: OutlineInputBorder())),
           const SizedBox(height: 12),
           TextField(controller: _confirmation, decoration: const InputDecoration(labelText: 'Confirmation #', border: OutlineInputBorder())),
+          if (context.read<Api>().isFamily) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _paidBy ?? context.read<Api>().myId,
+              decoration: const InputDecoration(labelText: 'Paid by', border: OutlineInputBorder()),
+              items: [
+                for (final m in context.read<Api>().members)
+                  DropdownMenuItem(
+                    value: m['userId'] as String,
+                    child: Text('${m['name']}${m['userId'] == context.read<Api>().myId ? ' (me)' : ''}'),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _paidBy = v),
+            ),
+          ],
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _busy

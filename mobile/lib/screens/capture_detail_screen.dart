@@ -76,6 +76,8 @@ class _CaptureDetailScreenState extends State<CaptureDetailScreen> {
           ],
           if (c.type == 'idea') ('Status', {'want': 'Want / open', 'done': 'Bought / done', 'dropped': 'Dropped'}[c.ideaStatus ?? 'want']),
           ('Date', formatDate(c.occurredAt)),
+          if (_api.isFamily) ('Paid by', _api.nameOf(c.paidBy)),
+          if (_api.isFamily && c.isPrivate) ('Visible to', 'Only you'),
           ('Return by', formatDate(c.returnBy)),
           ('Warranty until', formatDate(c.warrantyUntil)),
           (c.type == 'deposit' ? 'Payer' : c.type == 'expense' ? 'Merchant' : 'Paid to', c.counterparty),

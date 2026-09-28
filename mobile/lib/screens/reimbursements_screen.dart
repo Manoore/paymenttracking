@@ -20,7 +20,7 @@ class _ReimbursementsScreenState extends State<ReimbursementsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final api = context.read<Api>();
+    final api = context.watch<Api>();
     return Scaffold(
       appBar: AppBar(title: const Text('Owed to you')),
       body: Column(children: [
@@ -45,7 +45,7 @@ class _ReimbursementsScreenState extends State<ReimbursementsScreen> {
         ),
         Expanded(
           child: AsyncView<List<Map<String, dynamic>>>(
-            key: ValueKey('$_groupBy-$_includeDone-$_version'),
+            key: ValueKey('$_groupBy-$_includeDone-$_version-${api.workspace?['id']}'),
             load: () async {
               final data = await api.get('/reimbursements', {'groupBy': _groupBy, 'includeDone': _includeDone}) as Map<String, dynamic>;
               return (data['groups'] as List).cast<Map<String, dynamic>>();

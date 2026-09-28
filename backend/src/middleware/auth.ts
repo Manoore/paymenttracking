@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { Types } from "mongoose";
-import { forbidden, unauthorized } from "../lib/errors.js";
+import { forbidden, HttpError, unauthorized } from "../lib/errors.js";
 import { verifyAccessToken } from "../lib/tokens.js";
 import { Membership, User, type Role } from "../models/identity.js";
 
@@ -38,7 +38,8 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   if (!workspaceId) throw forbidden("No workspace");
 
   const membership = await Membership.findOne({ userId: user._id, workspaceId }).lean();
-  if (!membership) throw forbidden("Not a member of this workspace");
+  // Distinct code so clients can fall back to the default space (vs. a read-only 403).
+  if (!membership) throw new HttpError(403, "Not a member of this workspace", "not_member");
 
   req.auth = {
     userId: user._id,

@@ -14,21 +14,39 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final _view = GlobalKey<AsyncViewState<Dashboard>>();
 
   @override
   Widget build(BuildContext context) {
-    final api = context.read<Api>();
+    final api = context.watch<Api>();
+    final spaces = api.workspaces;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Capture Hub'),
+        title: spaces.length < 2
+            ? const Text('Capture Hub')
+            : PopupMenuButton<String>(
+                tooltip: 'Switch space',
+                onSelected: (id) => api.switchWorkspace(id),
+                itemBuilder: (_) => [
+                  for (final w in spaces)
+                    PopupMenuItem(
+                      value: w['id'] as String,
+                      child: Text('${w['kind'] == 'family' ? '👪 ' : '🔒 '}${w['name']}'),
+                    ),
+                ],
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(child: Text('${api.isFamily ? '👪 ' : '🔒 '}${api.workspace?['name'] ?? ''}', overflow: TextOverflow.ellipsis)),
+                  const Icon(Icons.arrow_drop_down),
+                ]),
+              ),
         actions: [
+          if (api.isFamily)
+            IconButton(tooltip: 'Household', icon: const Icon(Icons.event_available_outlined), onPressed: () => context.push('/household')),
           IconButton(tooltip: 'Inbox', icon: const Icon(Icons.inbox_outlined), onPressed: () => context.push('/inbox')),
           IconButton(tooltip: 'Profile', icon: const Icon(Icons.account_circle_outlined), onPressed: () => context.push('/profile')),
         ],
       ),
       body: AsyncView<Dashboard>(
-        key: _view,
+        key: ValueKey('dash-${api.workspace?['id']}'),
         load: () async => Dashboard.fromJson(await api.get('/dashboard') as Map<String, dynamic>),
         builder: (context, d, reload) {
           final due = [...d.overdue, ...d.upcoming];
@@ -36,6 +54,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return ListView(
             padding: const EdgeInsets.only(bottom: 96),
             children: [
+              if (api.isFamily)
+                Card(
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: ListTile(
+                    leading: const Icon(Icons.event_available_outlined),
+                    title: const Text('Household this month'),
+                    subtitle: const Text('Who paid which bills, who is paying next'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/household'),
+                  ),
+                ),
               if (d.inboxCount > 0)
                 Card(
                   margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../api.dart';
@@ -112,6 +113,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [
+                const SectionTitle('Family & sharing'),
+                Card(
+                  margin: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(Icons.family_restroom),
+                    title: const Text('Share bills with your family'),
+                    subtitle: const Text('Shared space, invites, who paid what'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/family'),
+                  ),
+                ),
                 const SectionTitle('Appearance'),
                 ThemeModePicker(controller: context.read<ThemeController>()),
                 const SectionTitle('Your info'),

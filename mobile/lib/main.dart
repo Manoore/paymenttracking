@@ -8,6 +8,8 @@ import 'screens/capture_detail_screen.dart';
 import 'screens/capture_form_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/family_screen.dart';
+import 'screens/household_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/recurring_screens.dart';
 import 'screens/reimbursements_screen.dart';
@@ -58,6 +60,8 @@ class _CaptureHubAppState extends State<CaptureHubApp> {
         ],
       ),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+      GoRoute(path: '/family', builder: (_, _) => const FamilyScreen()),
+      GoRoute(path: '/household', builder: (_, _) => const HouseholdScreen()),
       GoRoute(path: '/inbox', builder: (_, _) => const ActivityScreen(inbox: true)),
       GoRoute(
         path: '/new',
@@ -65,7 +69,10 @@ class _CaptureHubAppState extends State<CaptureHubApp> {
       ),
       GoRoute(path: '/captures/:id', builder: (_, state) => CaptureDetailScreen(id: state.pathParameters['id']!)),
       GoRoute(path: '/recurring/new', builder: (_, _) => const ScheduleFormScreen()),
-      GoRoute(path: '/recurring/:id', builder: (_, state) => ScheduleDetailScreen(id: state.pathParameters['id']!)),
+      GoRoute(
+        path: '/recurring/:id',
+        builder: (_, state) => ScheduleDetailScreen(id: state.pathParameters['id']!, openPay: state.uri.queryParameters['pay'] == '1'),
+      ),
     ],
   );
 

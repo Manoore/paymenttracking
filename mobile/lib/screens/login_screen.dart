@@ -13,6 +13,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _invite = TextEditingController();
   bool _register = false;
   bool _signupOpen = false;
   bool _busy = false;
@@ -35,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _invite.dispose();
     super.dispose();
   }
 
@@ -46,7 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final api = context.read<Api>();
     try {
       if (_register) {
-        await api.register(_name.text.trim(), _email.text.trim(), _password.text);
+        final invite = _invite.text.trim();
+        await api.register(_name.text.trim(), _email.text.trim(), _password.text,
+            inviteToken: invite.isEmpty ? null : Api.inviteTokenFrom(invite));
       } else {
         await api.login(_email.text.trim(), _password.text);
       }
@@ -85,8 +89,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     }),
                   ),
                   const SizedBox(height: 20),
-                  if (_register && !_signupOpen) ...[
-                    const Text('New sign-ups are closed. This Capture Hub is private; sign in if you already have an account.'),
+                  if (_register && !_signupOpen && _invite.text.trim().isEmpty) ...[
+                    const Text('New sign-ups are closed. Sign in, or paste a family invite link below to join.'),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_register) ...[
+                    TextField(
+                      controller: _invite,
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'Family invite link (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                   ],
                   if (_register) ...[
@@ -121,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   const SizedBox(height: 20),
                   FilledButton(
-                    onPressed: _busy || (_register && !_signupOpen) ? null : _submit,
+                    onPressed: _busy || (_register && !_signupOpen && _invite.text.trim().isEmpty) ? null : _submit,
                     child: _busy
                         ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : Text(_register ? 'Create account' : 'Sign in'),

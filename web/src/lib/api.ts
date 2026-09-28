@@ -105,9 +105,12 @@ async function request<T>(method: string, path: string, body?: unknown, retried 
     body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
   if (res.status === 403 && activeWorkspaceId()) {
-    // Removed from that workspace (or it no longer exists): fall back to the default one.
-    switchWorkspace(null);
-    throw new ApiError(403, "Switched back to your default space");
+    const body = await res.clone().json().catch(() => null);
+    if (body?.error?.code === "not_member") {
+      // Removed from that workspace (or it no longer exists): fall back to the default one.
+      switchWorkspace(null);
+      throw new ApiError(403, "Switched back to your default space");
+    }
   }
   if (res.status === 401 && !retried) {
     await getToken(true).catch(() => null);

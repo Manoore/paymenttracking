@@ -99,6 +99,12 @@ describe("family workspace", () => {
     expect(members.body.members.map((m: { name: string }) => m.name).sort()).toEqual(["Archna", "Manoore"]);
     await request(app).delete("/api/v1/workspaces/current/members/me").set(famHeader).expect(400); // owner can't leave
     await request(app).delete("/api/v1/workspaces/current/members/me").set(spAuth).expect(204);
+    // Asking for a space you're no longer in gives a distinct code so apps fall back to the default space.
+    const gone = await request(app)
+      .get("/api/v1/captures")
+      .set({ ...spAuth, "X-Workspace-Id": famHeader["X-Workspace-Id"] })
+      .expect(403);
+    expect(gone.body.error.code).toBe("not_member");
   });
 
   it("viewers can look but not change anything", async () => {

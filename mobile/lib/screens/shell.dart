@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../api.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.shell});
@@ -7,9 +10,13 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Tabs watch Api themselves and reload when the active space changes.
+    final canWrite = context.select<Api, bool>((a) => a.canWrite);
     return Scaffold(
       body: shell,
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: !canWrite
+          ? null
+          : FloatingActionButton(
         tooltip: 'New capture',
         onPressed: () => context.push('/new'),
         child: const Icon(Icons.add),
