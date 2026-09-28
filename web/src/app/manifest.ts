@@ -8,8 +8,11 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     display: "standalone",
     background_color: "#f6f7f9",
-    theme_color: "#2456d6",
-    icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
+    theme_color: "#4f46e5",
+    icons: [
+      { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
+      { src: "/apple-icon", sizes: "180x180", type: "image/png" },
+    ],
     // Installed on Android, "Share → Capture Hub" opens a prefilled capture.
     share_target: { action: "/new", method: "GET", params: { title: "title", text: "text", url: "url" } },
   } as MetadataRoute.Manifest;
