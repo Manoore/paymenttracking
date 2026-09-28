@@ -165,7 +165,24 @@ class _CaptureDetailScreenState extends State<CaptureDetailScreen> {
                         ? null
                         : () async {
                             final picked = await pickUploads(context);
-                            if (picked.isNotEmpty) await _run(() => _api.upload(picked, captureId: c.id));
+                            if (picked.isEmpty) return;
+                            await _run(() async {
+                              final created = await _api.upload(picked, captureId: c.id);
+                              // Read the first photo/PDF straight away, like New capture does.
+                              if (_api.readerOn && _api.reader?['autoRead'] == true) {
+                                final first = created.where((a) {
+                                  final t = a['mimeType'] as String? ?? '';
+                                  return t.startsWith('image/') && t != 'image/heic' && t != 'image/heif' || t == 'application/pdf';
+                                }).firstOrNull;
+                                if (first != null) {
+                                  try {
+                                    await _api.post('/attachments/${first['_id']}/read');
+                                  } catch (e) {
+                                    if (mounted) showError(this.context, e);
+                                  }
+                                }
+                              }
+                            });
                           },
                     icon: const Icon(Icons.add),
                     label: const Text('Add'),

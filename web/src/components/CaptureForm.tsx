@@ -298,14 +298,13 @@ export function CaptureForm({
   initialFiles?: File[];
 }) {
   const router = useRouter();
-  const { isFamily, members, user, workspace } = useWorkspace();
+  const { isFamily, members, user, workspace, reader } = useWorkspace();
   const [s, setS] = useState<FormState>(() => initialState(capture, prefill));
   const [files, setFiles] = useState<File[]>(initialFiles);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFollowUps, setShowFollowUps] = useState(Boolean(capture?.returnBy || capture?.warrantyUntil));
   // Document reading: which fields came from the file, and how to undo it.
-  const { reader } = useWorkspace();
   const [touched, setTouched] = useState<Set<keyof FormState>>(new Set());
   const [suggested, setSuggested] = useState<Set<keyof FormState>>(new Set());
   const [reading, setReading] = useState<"idle" | "busy" | "done" | "error">("idle");
@@ -466,14 +465,20 @@ export function CaptureForm({
               )}
             </div>
           )}
-          {reader?.configured && !reader.autoRead && files.some(isReadable) && reading === "idle" && (
+          {reader?.configured && files.some(isReadable) && (reading === "idle" || reading === "error") && (
             <button type="button" className="btn-secondary mt-3" onClick={() => void readFirst(files.find(isReadable)!)}>
-              <ScanText size={16} /> Fill in from file
+              <ScanText size={16} /> {reading === "error" ? "Try reading again" : "Fill in from file"}
             </button>
           )}
-          {reader && !reader.configured && reader.canManage && files.length > 0 && (
+          {reader?.configured && files.length > 0 && !files.some(isReadable) && (
             <p className="mt-3 text-xs text-muted">
-              Tip: add an AI API key in Profile → Document reading to fill this form in from the file automatically.
+              This file type can&apos;t be read. Use a JPEG/PNG photo, a screenshot or a PDF (iPhone HEIC photos aren&apos;t supported yet).
+            </p>
+          )}
+          {reader && !reader.configured && files.length > 0 && (
+            <p className="mt-3 text-xs text-muted">
+              Document reading isn&apos;t set up in {workspace?.name ?? "this space"}.{" "}
+              {reader.canManage ? "Add an API key in Profile → Document reading to fill this form in from the file." : "Ask the owner of this space to add an API key."}
             </p>
           )}
         </div>

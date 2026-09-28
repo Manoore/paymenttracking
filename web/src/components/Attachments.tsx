@@ -139,8 +139,11 @@ export function AttachmentPanel({
     setBusy(true);
     setError(null);
     try {
-      await uploadFiles(files, captureId);
+      const created = await uploadFiles(files, captureId);
       onChange();
+      // Same as New capture: read the first readable new file straight away.
+      const first = created.find((a) => isReadable(a) && !a.extraction);
+      if (first && reader?.configured && reader.autoRead) void readOne(first);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {

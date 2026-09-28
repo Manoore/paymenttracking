@@ -135,6 +135,9 @@ class _ReaderSettingsScreenState extends State<ReaderSettingsScreen> {
       body: s == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 40), children: [
+              Text('Applies to the space “${context.watch<Api>().workspace?['name'] ?? ''}”. Each space has its own key.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+              const SizedBox(height: 8),
               const Text('When you attach a receipt or bill, your chosen AI provider reads the amount, date, payee and confirmation '
                   'number, and you check before saving. Files go to that provider using your own API key.'),
               if (s['configured'] == true) ...[

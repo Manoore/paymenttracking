@@ -6,10 +6,17 @@ import { api, ApiError } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import type { ProviderId, ProviderInfo, ReaderSettings as Settings } from "@/lib/reader";
 import { ErrorNote, Field, Section, Spinner } from "./ui";
+import { useWorkspace } from "./WorkspaceContext";
 
 /** Profile → Document reading: choose an AI provider, paste its API key, pick a model. */
 export function ReaderSettings() {
   const settings = useApi<Settings>("/workspaces/current/reader");
+  // The rest of the app reads these settings from the shared workspace context; refresh it too.
+  const { reload: reloadWorkspace, workspace } = useWorkspace();
+  const refresh = () => {
+    void settings.reload();
+    reloadWorkspace();
+  };
   const providers = useApi<{ providers: ProviderInfo[] }>("/reader/providers");
   const [editing, setEditing] = useState(false);
 
@@ -25,6 +32,11 @@ export function ReaderSettings() {
           </span>
           <div className="min-w-0 flex-1 text-sm">
             <p className="font-medium">Fill in forms from photos, screenshots and PDFs</p>
+            {workspace && (
+              <p className="text-xs text-muted">
+                Applies to the space “{workspace.name}”. Each space (personal or family) has its own key.
+              </p>
+            )}
             <p className="text-muted">
               When you attach a receipt or bill, the AI provider you choose reads the amount, date, payee and confirmation number.
               You always check before saving. Files are sent to that provider using your own API key.
@@ -62,7 +74,7 @@ export function ReaderSettings() {
               onCancel={() => setEditing(false)}
               onSaved={() => {
                 setEditing(false);
-                void settings.reload();
+                refresh();
               }}
             />
           ) : (
@@ -76,7 +88,7 @@ export function ReaderSettings() {
                   onClick={async () => {
                     if (!confirm("Remove the API key? Files will no longer be read automatically.")) return;
                     await api.del("/workspaces/current/reader");
-                    void settings.reload();
+                    refresh();
                   }}
                 >
                   <Trash2 size={16} /> Remove key
