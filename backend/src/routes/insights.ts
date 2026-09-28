@@ -6,6 +6,7 @@ import { notFound } from "../lib/errors.js";
 import { addDays, startOfUtcDay } from "../lib/recurrence.js";
 import { ctx, scope } from "../middleware/auth.js";
 import { Capture } from "../models/Capture.js";
+import { Membership, User } from "../models/identity.js";
 import { Notification, RecurringSchedule } from "../models/RecurringSchedule.js";
 
 export const insightsRouter = Router();
@@ -294,4 +295,96 @@ insightsRouter.get("/properties", async (req, res) => {
     byKey.set(key, cur);
   }
   res.json({ items: [...byKey.values()] });
+});
+
+/**
+ * Household view for one month: each shared bill's status (paid by whom, being
+ * paid by someone, or still due) and how much each member paid in total, so
+ * partners never pay the same thing twice and can even out if they split costs.
+ */
+insightsRouter.get("/household", async (req, res) => {
+  const { workspaceId } = ctx(req);
+  const month = z.string().regex(/^\d{4}-\d{2}$/).optional().parse(req.query.month) ?? new Date().toISOString().slice(0, 7);
+  const start = new Date(`${month}-01T00:00:00Z`);
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
+  const inMonth = { $gte: start, $lt: end };
+
+  const [members, schedules, spent] = await Promise.all([
+    Membership.find({ workspaceId }).lean(),
+    RecurringSchedule.find({ workspaceId, active: true }).lean(),
+    Capture.find({
+      $and: [
+        scope(req),
+        { type: { $in: ["payment", "expense"] } },
+        { $or: [{ occurredAt: inMonth }, { occurredAt: { $exists: false }, createdAt: inMonth }] },
+      ],
+    })
+      .sort({ occurredAt: -1 })
+      .limit(500)
+      .lean(),
+  ]);
+  const users = await User.find({ _id: { $in: members.map((m) => m.userId) } }).lean();
+  const nameOf = (id?: unknown) => users.find((u) => id && u._id.equals(id as string))?.name ?? "Unknown";
+
+  const bills = schedules
+    .map((s) => {
+      const paid = spent.find((c) => c.payment?.scheduleId?.equals(s._id));
+      if (paid)
+        return {
+          scheduleId: s._id,
+          title: s.title,
+          amountMinor: paid.amountMinor ?? s.amountMinor,
+          currency: s.currency,
+          status: "paid" as const,
+          paidBy: paid.paidBy ?? paid.createdBy,
+          paidByName: nameOf(paid.paidBy ?? paid.createdBy),
+          paidAt: paid.occurredAt,
+          captureId: paid._id,
+        };
+      // Viewing the current month also shows bills due in the next 10 days, and any
+      // bill someone has said they're paying, so upcoming work is visible early.
+      const isCurrentMonth = start <= new Date() && new Date() < end;
+      const horizon = isCurrentMonth ? new Date(Math.max(end.getTime(), Date.now() + 10 * 86_400_000)) : end;
+      if (s.nextDueDate >= horizon && !s.claimedBy) return null;
+      return {
+        scheduleId: s._id,
+        title: s.title,
+        amountMinor: s.amountMinor,
+        currency: s.currency,
+        status: s.claimedBy ? ("claimed" as const) : ("due" as const),
+        dueDate: s.nextDueDate,
+        claimedBy: s.claimedBy,
+        claimedByName: s.claimedBy ? nameOf(s.claimedBy) : undefined,
+      };
+    })
+    .filter(Boolean);
+
+  const totals = new Map<string, { userId: unknown; name: string; currency: string; totalMinor: number; count: number }>();
+  for (const c of spent) {
+    const who = c.paidBy ?? c.createdBy;
+    const key = `${who}|${c.currency}`;
+    const t = totals.get(key) ?? { userId: who, name: nameOf(who), currency: c.currency ?? "USD", totalMinor: 0, count: 0 };
+    t.totalMinor += c.amountMinor ?? 0;
+    t.count++;
+    totals.set(key, t);
+  }
+
+  res.json({
+    month,
+    members: members.map((m) => ({ userId: m.userId, name: nameOf(m.userId), role: m.role })),
+    bills,
+    paidByMember: [...totals.values()].sort((a, b) => b.totalMinor - a.totalMinor),
+    items: spent.map((c) => ({
+      _id: c._id,
+      title: c.title,
+      type: c.type,
+      amountMinor: c.amountMinor,
+      currency: c.currency,
+      occurredAt: c.occurredAt,
+      counterparty: c.counterparty,
+      category: c.category,
+      paidBy: c.paidBy ?? c.createdBy,
+      paidByName: nameOf(c.paidBy ?? c.createdBy),
+    })),
+  });
 });

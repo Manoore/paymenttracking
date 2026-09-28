@@ -6,7 +6,7 @@ import { captureCreate, captureUpdate, objectId, pagination } from "../lib/valid
 import { ctx, requireWrite, scope } from "../middleware/auth.js";
 import { Attachment } from "../models/Attachment.js";
 import { Capture, type CaptureDoc } from "../models/Capture.js";
-import { Workspace } from "../models/identity.js";
+import { Membership, Workspace } from "../models/identity.js";
 import { storageFor } from "../storage/index.js";
 import { withUrl } from "./attachments.js";
 
@@ -41,6 +41,13 @@ async function assertAttachmentsOwned(req: Request, ids: string[] | undefined) {
   if (!ids?.length) return;
   const count = await Attachment.countDocuments({ _id: { $in: ids }, workspaceId: ctx(req).workspaceId, deletedAt: { $exists: false } });
   if (count !== new Set(ids).size) throw badRequest("One or more attachments not found");
+}
+
+/** "Paid by" must be someone in this workspace. */
+async function assertMember(req: Request, userId: string | null | undefined) {
+  if (!userId) return;
+  const ok = await Membership.exists({ workspaceId: ctx(req).workspaceId, userId });
+  if (!ok) throw badRequest("Paid by must be a member of this workspace");
 }
 
 async function assertLinksOwned(req: Request, links: { captureId: string }[] | undefined) {
@@ -184,11 +191,15 @@ capturesRouter.post("/", requireWrite, async (req, res) => {
   const { workspaceId, userId } = ctx(req);
   await assertAttachmentsOwned(req, body.attachmentIds);
   await assertLinksOwned(req, body.links);
+  await assertMember(req, body.paidBy);
   const ws = await Workspace.findById(workspaceId).lean();
 
   const doc = new Capture({
     currency: ws?.defaultCurrency ?? "USD",
     filed: body.type !== "note",
+    // Money you record is assumed paid by you unless you pick another member.
+    ...(["payment", "expense"].includes(body.type) ? { paidBy: userId } : {}),
+    ...(["payment", "expense", "deposit"].includes(body.type) ? { occurredAt: new Date() } : {}),
     ...body,
     workspaceId,
     createdBy: userId,
@@ -219,6 +230,7 @@ capturesRouter.patch("/:id", requireWrite, async (req, res) => {
   const doc = await loadCapture(req, String(req.params.id));
   await assertAttachmentsOwned(req, body.attachmentIds);
   await assertLinksOwned(req, body.links);
+  await assertMember(req, body.paidBy);
   if (body.links?.some((l) => l.captureId === doc.id)) throw badRequest("A record cannot link to itself");
 
   const { set, unset } = toPathUpdates(body as Record<string, unknown>);

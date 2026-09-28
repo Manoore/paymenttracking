@@ -68,6 +68,22 @@ membershipSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });
 membershipSchema.index({ userId: 1 });
 export const Membership = model("Membership", membershipSchema);
 
+/** Link-based invitation to join a family workspace. Single use, expires in 7 days. */
+const inviteSchema = new Schema(
+  {
+    workspaceId: { type: Schema.Types.ObjectId, ref: "Workspace", required: true },
+    invitedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    tokenHash: { type: String, required: true, unique: true },
+    role: { type: String, enum: ["editor", "viewer"], default: "editor" },
+    expiresAt: { type: Date, required: true },
+    acceptedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    acceptedAt: Date,
+  },
+  { timestamps: true },
+);
+inviteSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 30 * 86_400 });
+export const Invite = model("Invite", inviteSchema);
+
 const refreshTokenSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },

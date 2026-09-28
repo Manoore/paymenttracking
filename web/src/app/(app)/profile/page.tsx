@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Bell, BellOff, CheckCircle2, Loader2, LogOut } from "lucide-react";
 import { disablePush, enablePush, pushState, type PushState } from "@/lib/push";
 import { ErrorNote, Field, PageHeader, Section, Spinner } from "@/components/ui";
@@ -375,6 +376,15 @@ export default function ProfilePage() {
           </button>
         }
       />
+      <Section title="Family & sharing">
+        <Link href="/family" className="card flex items-center justify-between gap-3 p-4 hover:border-accent">
+          <div>
+            <p className="font-medium">Share bills with your family</p>
+            <p className="text-sm text-muted">Shared space, invites, who paid what.</p>
+          </div>
+          <span className="text-sm text-accent">Open →</span>
+        </Link>
+      </Section>
       <Section title="Appearance">
         <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
           <div>

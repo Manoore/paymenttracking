@@ -1,12 +1,13 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { z } from "zod";
 import { config } from "../config.js";
 import { HttpError, unauthorized } from "../lib/errors.js";
 import { issueRefreshToken, revokeRefreshToken, rotateRefreshToken, signAccessToken } from "../lib/tokens.js";
 import { ctx, requireAuth } from "../middleware/auth.js";
+import { acceptInvite, findValidInvite } from "./workspaces.js";
 import { Membership, RefreshToken, User, Workspace } from "../models/identity.js";
 
 export const authRouter = Router();
@@ -21,7 +22,13 @@ const authLimiter = rateLimit({
 const email = z.string().trim().toLowerCase().email().max(200);
 const password = z.string().min(10, "Password must be at least 10 characters").max(200);
 
-const registerBody = z.object({ email, password, name: z.string().trim().min(1).max(100) });
+const registerBody = z.object({
+  email,
+  password,
+  name: z.string().trim().min(1).max(100),
+  // A valid family invite lets someone create an account even when sign-up is closed.
+  inviteToken: z.string().min(20).max(200).optional(),
+});
 const loginBody = z.object({ email, password: z.string().min(1).max(200) });
 const refreshBody = z.object({ refreshToken: z.string().min(20) });
 
@@ -66,7 +73,9 @@ async function publicUser(userId: unknown) {
 authRouter.post("/register", authLimiter, async (req, res) => {
   const body = registerBody.parse(req.body);
   const anyUser = await User.exists({});
-  if (anyUser && !config.allowSignup) throw new HttpError(403, "Sign-up is closed", "signup_closed");
+  const invite = body.inviteToken ? await findValidInvite(body.inviteToken) : null;
+  if (body.inviteToken && !invite) throw new HttpError(410, "This invite link has expired or was already used", "invite_invalid");
+  if (anyUser && !config.allowSignup && !invite) throw new HttpError(403, "Sign-up is closed", "signup_closed");
   if (await User.exists({ email: body.email })) throw new HttpError(409, "Email already registered", "email_taken");
 
   const passwordHash = await bcrypt.hash(body.password, 12);
@@ -93,6 +102,7 @@ authRouter.post("/register", authLimiter, async (req, res) => {
     await session?.endSession();
   }
 
+  if (body.inviteToken) await acceptInvite(body.inviteToken, new Types.ObjectId(userId!));
   res.status(201).json({ user: await publicUser(userId!), ...(await sessionFor(userId!, req.get("user-agent"))) });
 });
 

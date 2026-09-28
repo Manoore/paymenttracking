@@ -6,9 +6,11 @@ import { Plus } from "lucide-react";
 import { Empty, ErrorNote, PageHeader, Spinner } from "@/components/ui";
 import { daysUntil, formatDate, formatMoney, frequencyLabel, monthlyEquivalent, relativeDue } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import { useWorkspace } from "@/components/WorkspaceContext";
 import type { Schedule } from "@/lib/types";
 
 export default function RecurringPage() {
+  const { isFamily, nameOf, user } = useWorkspace();
   const [showInactive, setShowInactive] = useState(false);
   const { data, error, loading } = useApi<{ items: Schedule[] }>("/recurring", { active: showInactive ? "all" : "true" });
 
@@ -65,6 +67,9 @@ export default function RecurringPage() {
                     {s.active && ` · ${relativeDue(s.nextDueDate)} (${formatDate(s.nextDueDate)})`}
                     {s.property && ` · ${s.property}`}
                   </p>
+                  {isFamily && s.claimedBy && (
+                    <p className="text-sm text-accent">✋ {s.claimedBy === user?.id ? "You are" : `${nameOf(s.claimedBy) ?? "Someone"} is`} paying this</p>
+                  )}
                 </div>
                 {s.amountMinor != null && <span className="font-medium tabular-nums">{formatMoney(s.amountMinor, s.currency)}</span>}
               </Link>

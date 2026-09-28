@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/welcome"];
+const PUBLIC_PATHS = ["/login", "/signup", "/welcome", "/invite"];
 
 /**
  * Signed-out visitors see the landing page at "/" and are sent to /login for

@@ -14,8 +14,11 @@ import {
   UserRound,
   Building2,
   MapPin,
+  Users,
+  CalendarCheck,
 } from "lucide-react";
-import { logout } from "@/lib/api";
+import { logout, switchWorkspace } from "@/lib/api";
+import { useWorkspace, WorkspaceProvider } from "./WorkspaceContext";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
 const NAV = [
@@ -39,7 +42,44 @@ function isActive(pathname: string, href: string) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <WorkspaceProvider>
+      <Shell>{children}</Shell>
+    </WorkspaceProvider>
+  );
+}
+
+/** Personal ↔ family space switcher. */
+function SpaceSwitcher({ compact = false }: { compact?: boolean }) {
+  const { user, workspace } = useWorkspace();
+  if (!user || user.workspaces.length < 2) return null;
+  return (
+    <select
+      aria-label="Switch space"
+      className={`input ${compact ? "min-h-9 w-36 py-1 text-sm" : "mb-4"}`}
+      value={workspace?.id ?? ""}
+      onChange={(e) => switchWorkspace(e.target.value)}
+    >
+      {user.workspaces.map((w) => (
+        <option key={w.id} value={w.id}>
+          {w.kind === "family" ? "👪 " : "🔒 "}
+          {w.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { isFamily, user } = useWorkspace();
+  const multiSpace = (user?.workspaces.length ?? 0) > 1;
+  const nav = [
+    ...NAV.slice(0, 4),
+    ...(isFamily ? [{ href: "/household", label: "Household", icon: CalendarCheck }] : []),
+    ...NAV.slice(4),
+    { href: "/family", label: "Family & sharing", icon: Users },
+  ];
 
   return (
     <div className="min-h-dvh md:flex">
@@ -47,11 +87,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link href="/" className="mb-6 px-3 text-lg font-semibold tracking-tight">
           Capture Hub
         </Link>
+        <SpaceSwitcher />
         <Link href="/new" className="btn-primary mb-4">
           <Plus size={18} /> New capture
         </Link>
         <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map(({ href, label, icon: Icon }) => (
+          {nav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -81,9 +122,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-bg/90 px-4 py-3 backdrop-blur md:hidden">
-          <Link href="/" className="text-base font-semibold">
-            Capture Hub
-          </Link>
+          {multiSpace ? (
+            <SpaceSwitcher compact />
+          ) : (
+            <Link href="/" className="text-base font-semibold">
+              Capture Hub
+            </Link>
+          )}
           <div className="flex items-center gap-1">
             <Link href="/inbox" aria-label="Inbox" className="btn-ghost px-3">
               <Inbox size={20} />
@@ -107,8 +152,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <Plus size={26} />
       </Link>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
-        {MOBILE_NAV.map(({ href, label, icon: Icon }) => (
+      <nav
+        className={`fixed inset-x-0 bottom-0 z-20 grid ${isFamily ? "grid-cols-5" : "grid-cols-4"} border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden`}
+      >
+        {(isFamily
+          ? [MOBILE_NAV[0], MOBILE_NAV[1], { href: "/household", label: "Household", icon: CalendarCheck }, MOBILE_NAV[2], MOBILE_NAV[3]]
+          : MOBILE_NAV
+        ).map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}

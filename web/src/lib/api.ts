@@ -53,6 +53,25 @@ async function getToken(force = false): Promise<string> {
   return inflight;
 }
 
+const WS_KEY = "ch-ws";
+
+/** Active workspace (personal or family) for this browser; sent on every API call. */
+export function activeWorkspaceId(): string | null {
+  try {
+    return localStorage.getItem(WS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function switchWorkspace(id: string | null) {
+  try {
+    if (id) localStorage.setItem(WS_KEY, id);
+    else localStorage.removeItem(WS_KEY);
+  } catch {}
+  window.location.href = "/";
+}
+
 export function fileUrl(relative?: string) {
   return relative ? `${API_BASE}${relative}` : "";
 }
@@ -80,10 +99,16 @@ async function request<T>(method: string, path: string, body?: unknown, retried 
     method,
     headers: {
       Authorization: `Bearer ${token}`,
+      ...(activeWorkspaceId() ? { "X-Workspace-Id": activeWorkspaceId()! } : {}),
       ...(body !== undefined && !isForm ? { "Content-Type": "application/json" } : {}),
     },
     body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
   });
+  if (res.status === 403 && activeWorkspaceId()) {
+    // Removed from that workspace (or it no longer exists): fall back to the default one.
+    switchWorkspace(null);
+    throw new ApiError(403, "Switched back to your default space");
+  }
   if (res.status === 401 && !retried) {
     await getToken(true).catch(() => null);
     return request<T>(method, path, body, true);

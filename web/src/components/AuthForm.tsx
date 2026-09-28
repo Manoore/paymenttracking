@@ -3,12 +3,21 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { setAccessToken } from "@/lib/api";
+import { api, setAccessToken, switchWorkspace } from "@/lib/api";
 
 type Mode = "login" | "register";
 
 /** Sign in and Create account on one screen, switchable with tabs. */
-export function AuthForm({ initialMode }: { initialMode: Mode }) {
+export function AuthForm({
+  initialMode,
+  inviteToken,
+  banner,
+}: {
+  initialMode: Mode;
+  /** Family invite: lets the person sign up even when sign-up is closed, then joins the shared space. */
+  inviteToken?: string;
+  banner?: React.ReactNode;
+}) {
   const params = useSearchParams();
   const [mode, setMode] = useState<Mode>(initialMode);
   // null = still checking; false = this deployment only allows existing accounts.
@@ -28,7 +37,7 @@ export function AuthForm({ initialMode }: { initialMode: Mode }) {
     setMode(m);
     setError(null);
     // Keep the URL shareable: /signup and /login show the matching tab.
-    window.history.replaceState(null, "", `${m === "login" ? "/login" : "/signup"}${window.location.search}`);
+    if (!inviteToken) window.history.replaceState(null, "", `${m === "login" ? "/login" : "/signup"}${window.location.search}`);
   };
 
   async function submit(e: React.FormEvent) {
@@ -38,7 +47,7 @@ export function AuthForm({ initialMode }: { initialMode: Mode }) {
     const res = await fetch(`/api/session/${mode}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mode === "login" ? { email: form.email, password: form.password } : form),
+      body: JSON.stringify(mode === "login" ? { email: form.email, password: form.password } : { ...form, inviteToken }),
     }).catch(() => null);
     const data = await res?.json().catch(() => null);
     if (!res?.ok) {
@@ -48,6 +57,16 @@ export function AuthForm({ initialMode }: { initialMode: Mode }) {
       return;
     }
     setAccessToken(data.accessToken);
+    if (inviteToken) {
+      // New accounts join during sign-up; existing accounts accept now.
+      let workspaceId = data.user?.defaultWorkspaceId as string | undefined;
+      if (mode === "login") {
+        const r = await api.post<{ workspaceId: string }>(`/invites/${encodeURIComponent(inviteToken)}/accept`).catch(() => null);
+        workspaceId = r?.workspaceId;
+      }
+      switchWorkspace(workspaceId ?? null);
+      return;
+    }
     const next = params.get("next");
     window.location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
   }
@@ -58,7 +77,7 @@ export function AuthForm({ initialMode }: { initialMode: Mode }) {
   });
 
   const registering = mode === "register";
-  const closed = registering && signupOpen === false;
+  const closed = registering && signupOpen === false && !inviteToken;
 
   return (
     <main className="flex min-h-dvh items-center justify-center px-4 py-10">
@@ -66,6 +85,7 @@ export function AuthForm({ initialMode }: { initialMode: Mode }) {
         <a href="/welcome" className="mb-6 inline-block text-sm text-muted hover:text-text">
           ← About Capture Hub
         </a>
+        {banner}
         <h1 className="text-2xl font-semibold tracking-tight">{registering ? "Create your account" : "Welcome back"}</h1>
         <p className="mb-6 mt-1 text-sm text-muted">
           {registering

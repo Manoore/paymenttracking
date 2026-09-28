@@ -10,6 +10,7 @@ import { ErrorNote, PageHeader, Section, Spinner, StatusBadge, TypeBadge, TypeIc
 import { api } from "@/lib/api";
 import { DOC_KIND_LABELS, formatDate, formatMoney, STATUS_LABELS, TYPE_LABELS, todayInput } from "@/lib/format";
 import { useApi, useDebounced } from "@/lib/hooks";
+import { useWorkspace } from "@/components/WorkspaceContext";
 import type { Capture, CaptureDetail, CaptureSummary, Paged, ReimbursementStatus } from "@/lib/types";
 
 function Detail({ label, value }: { label: string; value?: React.ReactNode }) {
@@ -70,6 +71,7 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
   const router = useRouter();
   const { data: c, error, loading, reload } = useApi<CaptureDetail>(`/captures/${id}`);
   const [editing, setEditing] = useState(false);
+  const { isFamily, nameOf } = useWorkspace();
   const [linking, setLinking] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -236,6 +238,8 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
               <Detail label="Status" value={{ want: "Want / open", done: "Bought / done", dropped: "Dropped" }[c.idea?.status ?? "want"]} />
             )}
             <Detail label="Date" value={formatDate(c.occurredAt)} />
+            {isFamily && <Detail label="Paid by" value={nameOf(c.paidBy ?? (c.type === "payment" || c.type === "expense" ? c.createdBy : undefined))} />}
+            {isFamily && c.visibility === "private" && <Detail label="Visible to" value="Only you" />}
             <Detail label="Return by" value={formatDate(c.returnBy)} />
             <Detail label="Warranty until" value={formatDate(c.warrantyUntil)} />
             <Detail label={c.type === "deposit" ? "Payer" : c.type === "expense" ? "Merchant" : "Paid to"} value={c.counterparty} />

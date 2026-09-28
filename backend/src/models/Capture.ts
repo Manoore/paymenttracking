@@ -123,6 +123,8 @@ const captureSchema = new Schema(
     occurredAt: Date, // paid / spent / deposited / captured date
     property: String,
     trip: String,
+    // Household: which member actually paid (defaults to whoever recorded it).
+    paidBy: { type: Schema.Types.ObjectId, ref: "User" },
     // Who this relates to / is on behalf of (e.g. "India Club", "Work"). For
     // reimbursable expenses it is also who pays you back.
     organization: String,

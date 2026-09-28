@@ -1,12 +1,13 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
-import { badRequest, notFound } from "../lib/errors.js";
+import { badRequest, HttpError, notFound } from "../lib/errors.js";
 import { nextDueDate } from "../lib/recurrence.js";
 import { amountMinor, currency, nullsToUndefined, objectId } from "../lib/validation.js";
 import { ctx, requireWrite, scope } from "../middleware/auth.js";
 import { Attachment } from "../models/Attachment.js";
 import { Capture } from "../models/Capture.js";
 import { RecurringSchedule } from "../models/RecurringSchedule.js";
+import { Membership, User } from "../models/identity.js";
 
 export const recurringRouter = Router();
 
@@ -32,6 +33,7 @@ const payInput = z.object({
   confirmationNumber: z.string().trim().max(200).optional(),
   notes: z.string().trim().max(5000).optional(),
   attachmentIds: z.array(objectId).max(20).default([]),
+  paidBy: objectId.optional(),
 });
 
 function wsFilter(req: Request) {
@@ -106,6 +108,8 @@ recurringRouter.post("/:id/pay", requireWrite, async (req, res) => {
     if (n !== new Set(body.attachmentIds).size) throw badRequest("One or more attachments not found");
   }
 
+  const paidBy = body.paidBy ?? userId.toString();
+  if (!(await Membership.exists({ workspaceId, userId: paidBy }))) throw badRequest("Paid by must be a member of this workspace");
   const dueDate = s.nextDueDate;
   const payment = await Capture.create({
     workspaceId,
@@ -121,6 +125,7 @@ recurringRouter.post("/:id/pay", requireWrite, async (req, res) => {
     property: s.property,
     occurredAt: body.paidAt,
     notes: body.notes,
+    paidBy,
     payment: {
       method: body.method ?? s.method,
       confirmationNumber: body.confirmationNumber,
@@ -132,9 +137,35 @@ recurringRouter.post("/:id/pay", requireWrite, async (req, res) => {
   if (body.attachmentIds.length) await Attachment.updateMany({ _id: { $in: body.attachmentIds } }, { captureId: payment._id });
 
   s.lastPaidAt = body.paidAt;
+  s.set("lastPaidBy", paidBy);
+  s.lastPaymentId = payment._id;
+  s.set("claimedBy", undefined);
+  s.set("claimedAt", undefined);
   s.nextDueDate = nextDueDate(dueDate, s.frequency as { unit: "week" | "month" | "year"; interval: number }, s.anchorDay ?? undefined);
   await s.save();
   res.status(201).json({ payment: payment.toObject(), schedule: s.toObject() });
+});
+
+/** "I'm paying this": visible to everyone in the workspace until paid or released. */
+recurringRouter.post("/:id/claim", requireWrite, async (req, res) => {
+  const s = await loadSchedule(req, String(req.params.id));
+  const { userId } = ctx(req);
+  if (s.claimedBy && !s.claimedBy.equals(userId)) {
+    const who = await User.findById(s.claimedBy).lean();
+    throw new HttpError(409, `${who?.name ?? "Someone"} is already paying this`, "already_claimed");
+  }
+  s.claimedBy = userId;
+  s.claimedAt = new Date();
+  await s.save();
+  res.json(s.toObject());
+});
+
+recurringRouter.delete("/:id/claim", requireWrite, async (req, res) => {
+  const s = await loadSchedule(req, String(req.params.id));
+  s.set("claimedBy", undefined);
+  s.set("claimedAt", undefined);
+  await s.save();
+  res.json(s.toObject());
 });
 
 recurringRouter.post("/:id/skip", requireWrite, async (req, res) => {

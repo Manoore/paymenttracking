@@ -39,6 +39,8 @@ export interface Capture {
   property?: string;
   trip?: string;
   organization?: string;
+  paidBy?: string;
+  createdBy?: string;
   returnBy?: string;
   warrantyUntil?: string;
   reminderDaysBefore?: number;
@@ -84,6 +86,9 @@ export interface Schedule {
   nextDueDate: string;
   reminderDaysBefore: number;
   lastPaidAt?: string;
+  lastPaidBy?: string;
+  claimedBy?: string;
+  claimedAt?: string;
   active: boolean;
 }
 

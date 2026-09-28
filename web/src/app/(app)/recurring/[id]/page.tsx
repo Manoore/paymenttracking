@@ -1,8 +1,9 @@
 "use client";
 
 import { use, useState } from "react";
-import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, Pencil, SkipForward, StopCircle } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useWorkspace } from "@/components/WorkspaceContext";
+import { CheckCircle2, Hand, Loader2, Pencil, SkipForward, StopCircle } from "lucide-react";
 import { FilePicker, PendingFiles, uploadFiles } from "@/components/Attachments";
 import { ScheduleForm } from "@/components/ScheduleForm";
 import { CaptureList, Empty, ErrorNote, Field, PageHeader, Section, Spinner } from "@/components/ui";
@@ -12,6 +13,8 @@ import { useApi } from "@/lib/hooks";
 import type { Capture, Schedule } from "@/lib/types";
 
 function PayForm({ s, onDone, onCancel }: { s: Schedule; onDone: () => void; onCancel: () => void }) {
+  const { isFamily, members, user } = useWorkspace();
+  const [paidBy, setPaidBy] = useState(user?.id ?? "");
   const [paidAt, setPaidAt] = useState(todayInput());
   const [amount, setAmount] = useState(minorToInput(s.amountMinor));
   const [method, setMethod] = useState(s.method ?? "");
@@ -32,6 +35,7 @@ function PayForm({ s, onDone, onCancel }: { s: Schedule; onDone: () => void; onC
         method: method || undefined,
         confirmationNumber: confirmation || undefined,
         attachmentIds: uploaded.map((a) => a._id),
+        ...(isFamily && paidBy ? { paidBy } : {}),
       });
       onDone();
     } catch (err) {
@@ -56,6 +60,18 @@ function PayForm({ s, onDone, onCancel }: { s: Schedule; onDone: () => void; onC
         <Field label="Confirmation #">
           <input className="input" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
         </Field>
+        {isFamily && (
+          <Field label="Paid by">
+            <select className="input" value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name}
+                  {m.userId === user?.id ? " (me)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
       </div>
       <div>
         <span className="label">Proof</span>
@@ -79,7 +95,22 @@ export default function SchedulePage({ params }: PageProps<"/recurring/[id]">) {
   const { id } = use(params);
   const router = useRouter();
   const { data: s, error, loading, reload } = useApi<Schedule & { history: Capture[] }>(`/recurring/${id}`);
-  const [mode, setMode] = useState<"view" | "pay" | "edit">("view");
+  const search = useSearchParams();
+  const [mode, setMode] = useState<"view" | "pay" | "edit">(search.get("pay") === "1" ? "pay" : "view");
+  const { isFamily, nameOf, user } = useWorkspace();
+  const [claimBusy, setClaimBusy] = useState(false);
+  const toggleClaim = async (release: boolean) => {
+    setClaimBusy(true);
+    try {
+      if (release) await api.del(`/recurring/${id}/claim`);
+      else await api.post(`/recurring/${id}/claim`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not update");
+    } finally {
+      setClaimBusy(false);
+      void reload();
+    }
+  };
 
   if (loading && !s) return <Spinner />;
   if (error) return <ErrorNote message={error} />;
@@ -130,6 +161,35 @@ export default function SchedulePage({ params }: PageProps<"/recurring/[id]">) {
         </div>
         {s.amountMinor != null && <p className="text-xl font-semibold tabular-nums">{formatMoney(s.amountMinor, s.currency)}</p>}
       </div>
+
+      {isFamily && s.active && (
+        <div
+          className={`card mb-6 flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${s.claimedBy ? "border-accent/40 bg-accent-soft" : ""}`}
+        >
+          <Hand size={18} className={s.claimedBy ? "text-accent" : "text-muted"} />
+          <span className="flex-1">
+            {s.claimedBy
+              ? `${s.claimedBy === user?.id ? "You are" : `${nameOf(s.claimedBy) ?? "Someone"} is`} paying this one`
+              : "Nobody has said they're paying this yet."}
+            {s.lastPaidAt && (
+              <span className="block text-muted">
+                Last paid {formatDate(s.lastPaidAt)}
+                {s.lastPaidBy && ` by ${nameOf(s.lastPaidBy) ?? "a member"}`}
+              </span>
+            )}
+          </span>
+          {!s.claimedBy && (
+            <button className="btn-secondary min-h-9 py-1.5" disabled={claimBusy} onClick={() => void toggleClaim(false)}>
+              <Hand size={14} /> I&apos;m paying this
+            </button>
+          )}
+          {s.claimedBy === user?.id && (
+            <button className="btn-ghost min-h-9 py-1.5" disabled={claimBusy} onClick={() => void toggleClaim(true)}>
+              Release
+            </button>
+          )}
+        </div>
+      )}
 
       {mode === "pay" ? (
         <PayForm

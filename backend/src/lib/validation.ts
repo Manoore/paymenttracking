@@ -36,6 +36,7 @@ export const captureInput = z.object({
   property: optText(200),
   trip: optText(200),
   organization: optText(200),
+  paidBy: objectId.nullish(),
   returnBy: z.coerce.date().nullish(),
   warrantyUntil: z.coerce.date().nullish(),
   reminderDaysBefore: z.number().int().min(0).max(120).nullish(),

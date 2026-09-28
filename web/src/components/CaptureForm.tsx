@@ -9,6 +9,7 @@ import { useApi, useSuggestions } from "@/lib/hooks";
 import type { Capture, CaptureType, DocumentKind, ReimbursementStatus, Template } from "@/lib/types";
 import { FilePicker, PendingFiles, uploadFiles } from "./Attachments";
 import { ErrorNote, Field, SuggestInput } from "./ui";
+import { useWorkspace } from "./WorkspaceContext";
 
 // Money first (most common), then the "save anything" types.
 const TYPES: CaptureType[] = ["payment", "expense", "deposit", "document", "place", "idea", "note", "link"];
@@ -64,6 +65,8 @@ export interface FormState {
   rating: string;
   ideaKind: IdeaKind;
   ideaStatus: IdeaStatus;
+  paidBy: string;
+  privateItem: boolean;
 }
 
 function initialState(c?: Capture, prefill?: Partial<FormState>): FormState {
@@ -107,6 +110,8 @@ function initialState(c?: Capture, prefill?: Partial<FormState>): FormState {
     rating: c?.place?.rating ? String(c.place.rating) : "",
     ideaKind: c?.idea?.kind ?? "product",
     ideaStatus: c?.idea?.status ?? "want",
+    paidBy: c?.paidBy ?? "",
+    privateItem: c?.visibility === "private",
     ...prefill,
   };
 }
@@ -188,6 +193,8 @@ function toPayload(s: FormState, isNew: boolean) {
           }
         : null,
     idea: s.type === "idea" ? { kind: s.ideaKind, status: s.ideaStatus } : null,
+    paidBy: purchase && s.paidBy ? s.paidBy : null,
+    visibility: s.privateItem ? "private" : "workspace",
   };
   if (isNew) {
     // Creation ignores explicit nulls; strip them to keep the request tidy.
@@ -257,6 +264,7 @@ export function CaptureForm({
   initialFiles?: File[];
 }) {
   const router = useRouter();
+  const { isFamily, members, user, workspace } = useWorkspace();
   const [s, setS] = useState<FormState>(() => initialState(capture, prefill));
   const [files, setFiles] = useState<File[]>(initialFiles);
   const [saving, setSaving] = useState(false);
@@ -474,6 +482,18 @@ export function CaptureForm({
             <SuggestInput id="method" values={methods} placeholder="ACH, Visa, Zelle…" {...text("method")} />
           </Field>
         )}
+        {isFamily && purchase && (
+          <Field label="Paid by" hint="So your family knows it's taken care of">
+            <select className="input" value={s.paidBy || user?.id || ""} onChange={(e) => set("paidBy", e.target.value)}>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name}
+                  {m.userId === user?.id ? " (me)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         {s.type === "payment" && (
           <Field label="Confirmation #">
             <input className="input" {...text("confirmationNumber")} />
@@ -492,6 +512,12 @@ export function CaptureForm({
               Cleared in my account
             </label>
           </>
+        )}
+        {isFamily && (
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" className="h-5 w-5" checked={s.privateItem} onChange={(e) => set("privateItem", e.target.checked)} />
+            Only me: hide this from others in {workspace?.name}
+          </label>
         )}
         <Field label="Tags" hint="Comma separated" className="sm:col-span-2">
           <input className="input" placeholder="tax-2026, receipts" {...text("tags")} />

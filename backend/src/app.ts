@@ -18,6 +18,7 @@ import { exportsRouter } from "./routes/exports.js";
 import { insightsRouter } from "./routes/insights.js";
 import { pushRouter } from "./routes/push.js";
 import { recurringRouter } from "./routes/recurring.js";
+import { workspacesRouter } from "./routes/workspaces.js";
 
 export function createApp() {
   const app = express();
@@ -55,8 +56,9 @@ export function createApp() {
   api.use("/captures", requireAuth, capturesRouter);
   api.use("/attachments", requireAuth, attachmentsRouter);
   api.use("/recurring", requireAuth, recurringRouter);
-  // Mounted before the catch-all "/" routers so /push/key stays public.
+  // Mounted before the catch-all "/" routers so public endpoints stay public.
   api.use("/push", pushRouter);
+  api.use("/", workspacesRouter);
   api.use("/", requireAuth, exportsRouter);
   api.use("/", requireAuth, insightsRouter);
   app.use("/api/v1", api);

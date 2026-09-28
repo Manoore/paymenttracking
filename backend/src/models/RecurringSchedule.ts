@@ -21,6 +21,11 @@ const recurringScheduleSchema = new Schema(
     reminderDaysBefore: { type: Number, default: 3, min: 0, max: 60 },
     lastRemindedFor: Date, // due date we last sent a reminder for (dedupe)
     lastPaidAt: Date,
+    lastPaidBy: { type: Schema.Types.ObjectId, ref: "User" },
+    lastPaymentId: { type: Schema.Types.ObjectId, ref: "Capture" },
+    // "I'm paying this": stops a spouse/partner paying the same bill twice.
+    claimedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    claimedAt: Date,
     active: { type: Boolean, default: true },
   },
   { timestamps: true },
