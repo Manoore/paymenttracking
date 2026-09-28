@@ -135,15 +135,21 @@ export function Field({
   children,
   hint,
   className = "",
+  suggested = false,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
   className?: string;
+  /** Value was filled in by document reading; the user should check it. */
+  suggested?: boolean;
 }) {
   return (
-    <label className={`block ${className}`}>
-      <span className="label">{label}</span>
+    <label className={`block ${className} ${suggested ? "[&_.input]:border-accent [&_.input]:bg-accent-soft/40" : ""}`}>
+      <span className="label flex items-center gap-2">
+        {label}
+        {suggested && <span className="chip bg-accent-soft text-accent">✨ Suggested — check</span>}
+      </span>
       {children}
       {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>

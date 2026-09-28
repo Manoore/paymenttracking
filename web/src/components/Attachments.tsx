@@ -1,9 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, Download, FileText, Loader2, Trash2, Upload, X } from "lucide-react";
+import { Camera, Download, FileText, Loader2, Trash2, Upload, X, ScanText } from "lucide-react";
 import { api, fileUrl } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
+import { isReadable, readAttachment, type Extraction } from "@/lib/reader";
+import { useWorkspace } from "./WorkspaceContext";
 import { prepareForUpload } from "@/lib/image";
 import type { Attachment } from "@/lib/types";
 
@@ -59,17 +61,77 @@ export async function uploadFiles(files: File[], captureId?: string) {
   return res.items;
 }
 
+const FIELD_LABELS: [keyof Extraction, string][] = [
+  ["counterparty", "Payee / merchant"],
+  ["amount", "Amount"],
+  ["date", "Date"],
+  ["dueDate", "Due date"],
+  ["expiresAt", "Expires"],
+  ["confirmationNumber", "Confirmation #"],
+  ["checkNumber", "Check #"],
+  ["category", "Category"],
+];
+
+/** What document reading found in one file, with a button to copy it into empty fields. */
+function ReadingCard({ x, onApply, applying }: { x: Extraction; onApply?: () => void; applying: boolean }) {
+  const rows = FIELD_LABELS.filter(([k]) => x[k] !== null && x[k] !== "");
+  return (
+    <div className="mt-2 rounded-lg border border-accent/40 bg-accent-soft/40 p-3 text-sm">
+      <p className="mb-2 flex items-center gap-2 font-medium text-accent">
+        <ScanText size={16} /> Found in this file{x.confidence === "low" ? " (hard to read, so check it)" : ""}
+      </p>
+      {rows.length ? (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+          {rows.map(([k, label]) => (
+            <div key={k} className="contents">
+              <dt className="text-muted">{label}</dt>
+              <dd className="break-words">{k === "amount" ? `${x.currency ?? ""} ${Number(x.amount).toFixed(2)}`.trim() : String(x[k])}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-muted">No amounts or dates found. The text is now searchable.</p>
+      )}
+      {onApply && rows.length > 0 && (
+        <button type="button" className="btn-secondary mt-3 min-h-9 py-1.5" disabled={applying} onClick={onApply}>
+          {applying && <Loader2 size={14} className="animate-spin" />} Fill empty fields on this record
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Gallery + upload for an existing record. */
 export function AttachmentPanel({
   captureId,
   attachments,
   onChange,
+  onApplyReading,
 }: {
   captureId: string;
   attachments: Attachment[];
   onChange: () => void;
+  /** Copy a reading into the record's empty fields. */
+  onApplyReading?: (x: Extraction) => Promise<void>;
 }) {
+  const { reader } = useWorkspace();
+  const [readingId, setReadingId] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const readOne = async (a: Attachment) => {
+    setReadingId(a._id);
+    setReadError(null);
+    try {
+      await readAttachment(a._id);
+      onChange();
+    } catch (e) {
+      setReadError(e instanceof Error ? e.message : "Could not read this file");
+    } finally {
+      setReadingId(null);
+    }
+  };
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Attachment | null>(null);
 
@@ -120,10 +182,44 @@ export function AttachmentPanel({
                   <Trash2 size={14} />
                 </button>
               </div>
+              {reader?.configured && isReadable(a) && !a.extraction && (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-1 border-t border-border bg-surface px-2 py-1.5 text-xs font-medium text-accent hover:bg-accent-soft"
+                  disabled={readingId !== null}
+                  onClick={() => void readOne(a)}
+                >
+                  {readingId === a._id ? <Loader2 size={12} className="animate-spin" /> : <ScanText size={12} />}
+                  {readingId === a._id ? "Reading…" : "Read with AI"}
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
+      {readError && <p className="mb-3 text-sm text-danger">{readError}</p>}
+      {attachments
+        .filter((a) => a.extraction?.fields)
+        .slice(0, 1)
+        .map((a) => (
+          <ReadingCard
+            key={a._id}
+            x={a.extraction!.fields}
+            applying={applying}
+            onApply={
+              onApplyReading
+                ? async () => {
+                    setApplying(true);
+                    try {
+                      await onApplyReading(a.extraction!.fields);
+                    } finally {
+                      setApplying(false);
+                    }
+                  }
+                : undefined
+            }
+          />
+        ))}
       <FilePicker onFiles={(f) => void add(f)} disabled={busy} />
       {busy && (
         <p className="mt-2 flex items-center gap-2 text-sm text-muted">

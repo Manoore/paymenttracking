@@ -171,7 +171,27 @@ export default function CapturePage({ params }: PageProps<"/captures/[id]">) {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div>
           <Section title="Proof & attachments">
-            <AttachmentPanel captureId={c._id} attachments={c.attachments} onChange={() => void reload()} />
+            <AttachmentPanel
+              captureId={c._id}
+              attachments={c.attachments}
+              onChange={() => void reload()}
+              onApplyReading={async (x) => {
+                // Only fill what's empty; never overwrite what you entered.
+                const body: Record<string, unknown> = {};
+                if (!c.counterparty && x.counterparty) body.counterparty = x.counterparty;
+                if (c.amountMinor == null && x.amount != null) body.amountMinor = Math.round(x.amount * 100);
+                if (!c.occurredAt && x.date) body.occurredAt = x.date;
+                if (!c.category && x.category) body.category = x.category;
+                if (x.currency && c.amountMinor == null && x.amount != null) body.currency = x.currency;
+                if (c.type === "payment" && !c.payment?.confirmationNumber && x.confirmationNumber)
+                  body.payment = { confirmationNumber: x.confirmationNumber };
+                if (c.type === "deposit" && !c.deposit?.checkNumber && x.checkNumber) body.deposit = { checkNumber: x.checkNumber };
+                if (c.type === "document" && !c.document?.expiresAt && x.expiresAt) body.document = { expiresAt: x.expiresAt };
+                if (!Object.keys(body).length) return alert("Nothing to fill: the fields found are already filled in.");
+                await api.patch(`/captures/${c._id}`, body);
+                await reload();
+              }}
+            />
           </Section>
 
           {c.notes && (

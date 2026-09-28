@@ -48,6 +48,19 @@ const workspaceSchema = new Schema(
     kind: { type: String, enum: ["personal", "family"], default: "personal" },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     defaultCurrency: { type: String, default: "USD" },
+    // Document reading (AI): provider + encrypted API key, set by the owner.
+    ai: {
+      provider: { type: String, enum: ["openai", "anthropic", "gemini", "openai_compatible"] },
+      model: String,
+      baseUrl: String,
+      apiKeyEnc: { type: String, select: false },
+      keyHint: String, // masked, e.g. "sk-…abcd"
+      autoRead: { type: Boolean, default: true },
+      monthlyLimit: { type: Number, default: 200, min: 1, max: 100_000 },
+      usageMonth: String, // "2026-09"
+      usageCount: { type: Number, default: 0 },
+      updatedAt: Date,
+    },
   },
   { timestamps: true },
 );

@@ -39,6 +39,93 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
   final List<PickedUpload> _files = [];
   bool _saving = false;
   Map<String, List<String>> _suggest = {};
+  // Document reading (AI) state.
+  bool _typeTouched = false;
+  bool _dateTouched = false;
+  bool _reading = false;
+  bool _readDone = false;
+  String? _readNote;
+  List<String> _filled = const [];
+  Map<String, Object?>? _beforeRead;
+
+  static const _providerNames = {'openai': 'OpenAI', 'anthropic': 'Claude', 'gemini': 'Gemini'};
+
+  Map<String, Object?> _snapshot() => {
+        for (final e in _c.entries) e.key: e.value.text,
+        '#type': _type,
+        '#date': _date,
+        '#expires': _expiresAt,
+        '#docKind': _docKind,
+      };
+
+  void _restore(Map<String, Object?> snap) {
+    snap.forEach((k, v) {
+      if (!k.startsWith('#')) c(k).text = v as String;
+    });
+    _type = snap['#type'] as String;
+    _date = snap['#date'] as DateTime;
+    _expiresAt = snap['#expires'] as DateTime?;
+    _docKind = snap['#docKind'] as String;
+  }
+
+  bool _isReadable(PickedUpload f) {
+    final n = f.name.toLowerCase();
+    return n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png') || n.endsWith('.webp') || n.endsWith('.gif') || n.endsWith('.pdf');
+  }
+
+  /// Fill empty fields from the file; never overwrite what the user typed.
+  Future<void> _readFirst(PickedUpload file) async {
+    final api = context.read<Api>();
+    setState(() {
+      _reading = true;
+      _readNote = null;
+    });
+    try {
+      final r = await api.readFile(file);
+      final x = (r['fields'] as Map).cast<String, dynamic>();
+      if (!mounted) return;
+      final before = _snapshot();
+      final filled = <String>[];
+      void offer(String key, String label, Object? v) {
+        if (v == null || '$v'.isEmpty || c(key).text.trim().isNotEmpty) return;
+        c(key).text = '$v';
+        filled.add(label);
+      }
+
+      setState(() {
+        if (!_typeTouched && captureTypes.contains(x['suggestedType'])) _type = x['suggestedType'] as String;
+        offer('title', 'title', x['title']);
+        offer('counterparty', 'payee', x['counterparty']);
+        offer('amount', 'amount', x['amount'] == null ? null : (x['amount'] as num).toStringAsFixed(2));
+        if (x['currency'] != null) c('currency').text = x['currency'] as String;
+        offer('category', 'category', x['category']);
+        offer('confirmation', 'confirmation #', x['confirmationNumber']);
+        offer('checkNumber', 'check #', x['checkNumber']);
+        if (!_dateTouched && x['date'] != null) {
+          _date = DateTime.parse('${x['date']}T00:00:00Z');
+          filled.add('date');
+        }
+        if (_type == 'document') {
+          if (_expiresAt == null && x['expiresAt'] != null) {
+            _expiresAt = DateTime.parse('${x['expiresAt']}T00:00:00Z');
+            filled.add('expiry');
+          }
+          if (docKindLabels.containsKey(x['documentKind'])) _docKind = x['documentKind'] as String;
+        }
+        _beforeRead = before;
+        _filled = filled;
+        _readDone = true;
+        final who = _providerNames[r['provider']] ?? 'your AI provider';
+        _readNote = filled.isEmpty
+            ? 'Read by $who, but nothing new to fill in.'
+            : 'Filled ${filled.join(', ')} from your file ($who). Please check.${x['confidence'] == 'low' ? ' The file was hard to read.' : ''}';
+      });
+    } catch (e) {
+      if (mounted) setState(() => _readNote = e.toString());
+    } finally {
+      if (mounted) setState(() => _reading = false);
+    }
+  }
 
   TextEditingController c(String k) => _c.putIfAbsent(k, TextEditingController.new);
 
@@ -253,7 +340,14 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
         children: [
           Wrap(spacing: 8, runSpacing: 8, children: [
             for (final t in captureTypes)
-              ChoiceChip(label: Text(typeLabels[t]!), selected: _type == t, onSelected: (_) => setState(() => _type = t)),
+              ChoiceChip(
+                label: Text(typeLabels[t]!),
+                selected: _type == t,
+                onSelected: (_) => setState(() {
+                  _type = t;
+                  _typeTouched = true;
+                }),
+              ),
           ]),
           const SizedBox(height: 16),
           if (isNew) ...[
@@ -262,12 +356,52 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
                   ? null
                   : () async {
                       final picked = await pickUploads(context);
-                      if (picked.isNotEmpty) setState(() => _files.addAll(picked));
+                      if (picked.isEmpty) return;
+                      setState(() => _files.addAll(picked));
+                      final first = picked.where(_isReadable).firstOrNull;
+                      if (first != null && api.readerOn && api.reader?['autoRead'] == true && !_readDone && !_reading) {
+                        await _readFirst(first);
+                      }
                     },
               icon: const Icon(Icons.add_a_photo_outlined),
               label: const Text('Add photo, screenshot or PDF'),
             ),
             PendingUploads(files: _files, onRemove: (i) => setState(() => _files.removeAt(i))),
+            if (_reading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Row(children: [
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 8),
+                  Text('Reading your file…'),
+                ]),
+              ),
+            if (_readNote != null && !_reading)
+              Card(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.document_scanner_outlined),
+                  title: Text(_readNote!),
+                  trailing: _beforeRead != null && _filled.isNotEmpty
+                      ? TextButton(
+                          onPressed: () => setState(() {
+                            _restore(_beforeRead!);
+                            _beforeRead = null;
+                            _readNote = null;
+                            _filled = const [];
+                            _readDone = false;
+                          }),
+                          child: const Text('Undo'),
+                        )
+                      : null,
+                ),
+              ),
+            if (api.readerOn && api.reader?['autoRead'] != true && !_readDone && !_reading && _files.any(_isReadable))
+              OutlinedButton.icon(
+                icon: const Icon(Icons.document_scanner_outlined),
+                label: const Text('Fill in from file'),
+                onPressed: () => _readFirst(_files.firstWhere(_isReadable)),
+              ),
             const SizedBox(height: 16),
           ],
           if (isFinance) ...[
@@ -290,7 +424,12 @@ class _CaptureFormScreenState extends State<CaptureFormScreen> {
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2100),
                   );
-                  if (d != null) setState(() => _date = DateTime.utc(d.year, d.month, d.day));
+                  if (d != null) {
+                    setState(() {
+                      _date = DateTime.utc(d.year, d.month, d.day);
+                      _dateTouched = true;
+                    });
+                  }
                 },
                 child: Text(formatDate(_date)),
               ),

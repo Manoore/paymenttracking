@@ -10,6 +10,7 @@ import { Attachment } from "../models/Attachment.js";
 import { Capture } from "../models/Capture.js";
 import { storage, storageFor } from "../storage/index.js";
 import { loadCapture } from "./captures.js";
+import { applyCachedReading } from "./reader.js";
 
 export const attachmentsRouter = Router();
 /** Public router: serves a file only with a valid signed `sig` for that attachment. */
@@ -119,6 +120,8 @@ attachmentsRouter.post("/", requireWrite, upload.array("files", 10), async (req,
       storage: { driver: storage().driver, key },
       extractedText: mimeType === "text/plain" ? file.buffer.toString("utf8").slice(0, 50_000) : undefined,
     });
+    // Reuse a reading made before saving (New capture auto-fill), so search covers it too.
+    await applyCachedReading(att);
     created.push(att);
   }
 

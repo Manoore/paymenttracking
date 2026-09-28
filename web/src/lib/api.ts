@@ -133,6 +133,7 @@ export const api = {
   get: <T>(path: string, query?: Query) => request<T>("GET", path + qs(query)),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>("PATCH", path, body),
+  put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
   del: (path: string) => request<void>("DELETE", path),
   upload: <T>(path: string, form: FormData) => request<T>("POST", path, form),
   download: async (path: string, query: Query | undefined, filename: string) => {

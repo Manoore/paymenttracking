@@ -17,6 +17,7 @@ import { capturesRouter } from "./routes/captures.js";
 import { exportsRouter } from "./routes/exports.js";
 import { insightsRouter } from "./routes/insights.js";
 import { pushRouter } from "./routes/push.js";
+import { readerRouter } from "./routes/reader.js";
 import { recurringRouter } from "./routes/recurring.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 
@@ -30,7 +31,7 @@ export function createApp() {
     cors({
       origin: (origin, cb) => cb(null, !origin || config.corsOrigins.includes(origin)),
       allowedHeaders: ["Authorization", "Content-Type", "X-Workspace-Id"],
-      methods: ["GET", "POST", "PATCH", "DELETE"],
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
       maxAge: 600,
     }),
   );
@@ -59,6 +60,7 @@ export function createApp() {
   // Mounted before the catch-all "/" routers so public endpoints stay public.
   api.use("/push", pushRouter);
   api.use("/", workspacesRouter);
+  api.use("/", readerRouter);
   api.use("/", requireAuth, exportsRouter);
   api.use("/", requireAuth, insightsRouter);
   app.use("/api/v1", api);

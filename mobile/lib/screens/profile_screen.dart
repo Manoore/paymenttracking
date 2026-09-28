@@ -113,6 +113,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
               children: [
+                const SectionTitle('Document reading (AI)'),
+                Card(
+                  margin: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: const Icon(Icons.document_scanner_outlined),
+                    title: const Text('Fill forms from photos and PDFs'),
+                    subtitle: Text(context.watch<Api>().readerOn
+                        ? 'On · ${context.watch<Api>().reader?['providerLabel']} · ${context.watch<Api>().reader?['model']}'
+                        : 'Off · add an OpenAI, Claude or Gemini API key'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/reader'),
+                  ),
+                ),
                 const SectionTitle('Family & sharing'),
                 Card(
                   margin: EdgeInsets.zero,

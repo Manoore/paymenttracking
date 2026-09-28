@@ -9,6 +9,7 @@ export interface Attachment {
   size: number;
   url?: string;
   createdAt: string;
+  extraction?: { provider: string; model: string; at: string; fields: import("./reader").Extraction };
 }
 
 export interface Reimbursement {

@@ -15,6 +15,13 @@ const attachmentSchema = new Schema(
       key: { type: String, required: true },
     },
     extractedText: { type: String, select: false },
+    // Last AI reading of this file (fields shown as suggestions; never auto-saved to money fields).
+    extraction: {
+      provider: String,
+      model: String,
+      at: Date,
+      fields: Schema.Types.Mixed,
+    },
     deletedAt: Date,
   },
   { timestamps: true },

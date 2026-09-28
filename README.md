@@ -70,6 +70,12 @@ Run `npx web-push generate-vapid-keys` once and set `VAPID_PUBLIC_KEY`, `VAPID_P
 `VAPID_SUBJECT` (e.g. `mailto:you@example.com`) on Render. Then each person turns them on per device in
 **Profile → Notifications**. On iPhone this works after adding the web app to the Home Screen (iOS 16.4+).
 
+### 4c. Document reading (AI, optional)
+Each space owner adds their own API key in **Profile → Document reading**: OpenAI, Anthropic (Claude), Google (Gemini),
+or any OpenAI-compatible service by URL. Keys are encrypted (AES-256-GCM) with a key derived from
+`JWT_REFRESH_SECRET`; set `SECRETS_KEY` (32+ random chars) on Render before you ever rotate JWT secrets.
+Readings are cached per file, so the same receipt is never sent twice. A monthly limit caps usage.
+
 ### 5. Mobile
 ```bash
 cd mobile

@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { User } from "@/lib/types";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { ReaderSettings } from "@/components/ReaderSettings";
 
 const CURRENCIES = ["USD", "INR", "EUR", "GBP", "CAD", "AUD", "SGD", "AED", "JPY"];
 
@@ -395,6 +396,7 @@ export default function ProfilePage() {
         </div>
       </Section>
       <ProfileForm user={data.user} onSaved={(u) => setData({ user: u })} />
+      <ReaderSettings />
       <PushSettings />
       <CalendarFeed />
       <PasswordForm />

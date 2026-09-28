@@ -22,6 +22,8 @@ const schema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default("mailto:admin@example.com"),
+  // Encrypts API keys saved in the app (document reading). Optional; see lib/secrets.ts.
+  SECRETS_KEY: z.string().min(32).optional(),
 });
 
 const parsed = schema.safeParse(process.env);

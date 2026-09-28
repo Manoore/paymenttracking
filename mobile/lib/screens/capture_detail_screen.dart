@@ -185,6 +185,17 @@ class _CaptureDetailScreenState extends State<CaptureDetailScreen> {
                     ),
                   ),
                 ),
+              if (_api.readerOn && _api.canWrite)
+                for (final a in c.attachments.where((a) => a.extraction == null && (a.isImage || a.mimeType == 'application/pdf')).take(1))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.document_scanner_outlined),
+                      label: const Text('Read with AI'),
+                      onPressed: _busy ? null : () => _run(() => _api.post('/attachments/${a.id}/read')),
+                    ),
+                  ),
+              for (final a in c.attachments.where((a) => a.extraction != null).take(1)) _ReadingCard(capture: c, x: a.extraction!, onApply: (body) => _run(() => _api.patch('/captures/${c.id}', body))),
               if (c.notes != null && c.notes!.isNotEmpty) ...[
                 const SectionTitle('Notes'),
                 Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SelectableText(c.notes!)),
@@ -253,6 +264,67 @@ class _AttachmentThumb extends StatelessWidget {
               onPressed: onDelete,
             ),
           ]),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// What document reading found, with a button that fills only the empty fields.
+class _ReadingCard extends StatelessWidget {
+  const _ReadingCard({required this.capture, required this.x, required this.onApply});
+  final Capture capture;
+  final Map<String, dynamic> x;
+  final void Function(Map<String, dynamic> body) onApply;
+
+  Map<String, dynamic> _emptyFieldUpdates() {
+    final c = capture;
+    final body = <String, dynamic>{};
+    if (c.counterparty == null && x['counterparty'] != null) body['counterparty'] = x['counterparty'];
+    if (c.amountMinor == null && x['amount'] != null) {
+      body['amountMinor'] = ((x['amount'] as num) * 100).round();
+      if (x['currency'] != null) body['currency'] = x['currency'];
+    }
+    if (c.occurredAt == null && x['date'] != null) body['occurredAt'] = x['date'];
+    if (c.category == null && x['category'] != null) body['category'] = x['category'];
+    if (c.type == 'payment' && c.confirmationNumber == null && x['confirmationNumber'] != null) {
+      body['payment'] = {'confirmationNumber': x['confirmationNumber']};
+    }
+    if (c.type == 'deposit' && c.checkNumber == null && x['checkNumber'] != null) body['deposit'] = {'checkNumber': x['checkNumber']};
+    if (c.type == 'document' && c.expiresAt == null && x['expiresAt'] != null) body['document'] = {'expiresAt': x['expiresAt']};
+    return body;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = {
+      'counterparty': 'Payee / merchant',
+      'amount': 'Amount',
+      'date': 'Date',
+      'dueDate': 'Due date',
+      'expiresAt': 'Expires',
+      'confirmationNumber': 'Confirmation #',
+      'checkNumber': 'Check #',
+      'category': 'Category',
+    };
+    final rows = labels.entries.where((e) => x[e.key] != null && '${x[e.key]}'.isNotEmpty).toList();
+    final updates = _emptyFieldUpdates();
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Found in this file${x['confidence'] == 'low' ? ' (hard to read)' : ''}', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          if (rows.isEmpty) const Text('No amounts or dates found. The text is now searchable.'),
+          for (final e in rows)
+            Text('${e.value}: ${e.key == 'amount' ? '${x['currency'] ?? ''} ${(x['amount'] as num).toStringAsFixed(2)}'.trim() : x[e.key]}'),
+          if (updates.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            OutlinedButton(onPressed: () => onApply(updates), child: const Text('Fill empty fields on this record')),
+          ],
         ]),
       ),
     );

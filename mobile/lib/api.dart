@@ -68,6 +68,10 @@ class Api extends ChangeNotifier {
   /// Active space (personal or family). null = the account's default.
   String? workspaceId;
 
+  /// Document reading (AI) settings for the active space, or null if unavailable.
+  Map<String, dynamic>? reader;
+  bool get readerOn => reader?['configured'] == true;
+
   /// Members of the active space: [{userId, name, email, role}].
   List<Map<String, dynamic>> members = const [];
 
@@ -102,6 +106,7 @@ class Api extends ChangeNotifier {
         await _storage.delete(key: _workspaceKey);
       }
       members = (((await get('/workspaces/current/members'))['members'] as List?) ?? const []).cast<Map<String, dynamic>>();
+      reader = await get('/workspaces/current/reader') as Map<String, dynamic>;
     } catch (_) {}
     notifyListeners();
   }
@@ -254,6 +259,15 @@ class Api extends ChangeNotifier {
 
   Future<dynamic> post(String path, [Object? body]) => _wrap(() => _dio.post(path, data: body ?? const {}));
   Future<dynamic> patch(String path, Object body) => _wrap(() => _dio.patch(path, data: body));
+  Future<dynamic> put(String path, Object body) => _wrap(() => _dio.put(path, data: body));
+
+  /// Reads a not-yet-saved file with the space's AI provider. Returns {fields, provider, model, cached}.
+  /// Upload the same bytes afterwards and the reading is reused (no second charge).
+  Future<Map<String, dynamic>> readFile(PickedUpload f) async {
+    final type = lookupMimeType(f.name, headerBytes: f.bytes.take(16).toList()) ?? 'application/octet-stream';
+    final form = FormData()..files.add(MapEntry('file', MultipartFile.fromBytes(f.bytes, filename: f.name, contentType: MediaType.parse(type))));
+    return _wrap<Map<String, dynamic>>(() => _dio.post('/reader/extract', data: form, options: Options(receiveTimeout: const Duration(seconds: 120))));
+  }
   Future<dynamic> delete(String path) => _wrap(() => _dio.delete(path));
 
   /// Uploads files; returns created attachment JSON objects.

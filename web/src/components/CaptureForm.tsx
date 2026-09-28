@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Loader2, Zap } from "lucide-react";
+import { ChevronDown, Loader2, ScanText, Undo2, Zap } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { DOC_KIND_LABELS, formatMoney, minorToInput, parseMoney, STATUS_LABELS, todayInput, toDateInput, TYPE_LABELS } from "@/lib/format";
 import { useApi, useSuggestions } from "@/lib/hooks";
+import { prepareForUpload } from "@/lib/image";
+import { isReadable, readFile, type Extraction } from "@/lib/reader";
 import type { Capture, CaptureType, DocumentKind, ReimbursementStatus, Template } from "@/lib/types";
 import { FilePicker, PendingFiles, uploadFiles } from "./Attachments";
 import { ErrorNote, Field, SuggestInput } from "./ui";
@@ -203,6 +205,38 @@ function toPayload(s: FormState, isNew: boolean) {
   return payload;
 }
 
+const DOC_KINDS = new Set(Object.keys(DOC_KIND_LABELS));
+
+/**
+ * Form values suggested by document reading. Only fills fields the user hasn't
+ * typed in, so nothing they entered is ever overwritten.
+ */
+function suggestionsFrom(x: Extraction, s: FormState, touched: Set<keyof FormState>): Partial<FormState> {
+  const out: Partial<FormState> = {};
+  const offer = <K extends keyof FormState>(k: K, v: FormState[K] | null | undefined, onlyIfEmpty = true) => {
+    if (v === null || v === undefined || v === "" || touched.has(k)) return;
+    if (onlyIfEmpty && s[k] !== "" && s[k] !== undefined) return;
+    out[k] = v;
+  };
+  if (!touched.has("type")) out.type = x.suggestedType;
+  const type = out.type ?? s.type;
+  offer("title", x.title);
+  offer("counterparty", x.counterparty);
+  offer("amount", x.amount != null ? x.amount.toFixed(2) : null);
+  offer("currency", x.currency, false);
+  offer("occurredAt", x.date, false); // replaces the default "today"
+  offer("category", x.category);
+  offer("confirmationNumber", x.confirmationNumber);
+  offer("checkNumber", x.checkNumber);
+  if (type === "document") {
+    offer("expiresAt", x.expiresAt);
+    if (x.documentKind && DOC_KINDS.has(x.documentKind)) offer("docKind", x.documentKind as DocumentKind, false);
+  }
+  return out;
+}
+
+const PROVIDER_NAMES: Record<string, string> = { openai: "OpenAI", anthropic: "Claude", gemini: "Gemini" };
+
 /** One-tap starting points built from what you record most often. */
 function Templates({ onPick }: { onPick: (t: Template) => void }) {
   const { data } = useApi<{ items: Template[] }>("/captures/templates");
@@ -270,6 +304,54 @@ export function CaptureForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFollowUps, setShowFollowUps] = useState(Boolean(capture?.returnBy || capture?.warrantyUntil));
+  // Document reading: which fields came from the file, and how to undo it.
+  const { reader } = useWorkspace();
+  const [touched, setTouched] = useState<Set<keyof FormState>>(new Set());
+  const [suggested, setSuggested] = useState<Set<keyof FormState>>(new Set());
+  const [reading, setReading] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [readNote, setReadNote] = useState<string | null>(null);
+  const [beforeRead, setBeforeRead] = useState<FormState | null>(null);
+  const sug = (k: keyof FormState) => suggested.has(k);
+
+  async function readFirst(file: File) {
+    setReading("busy");
+    setReadNote(null);
+    try {
+      const r = await readFile(file);
+      setS((cur) => {
+        const updates = suggestionsFrom(r.fields, cur, touched);
+        setBeforeRead(cur);
+        setSuggested(new Set(Object.keys(updates) as (keyof FormState)[]));
+        return { ...cur, ...updates };
+      });
+      setReading("done");
+      const who = PROVIDER_NAMES[r.provider] ?? "your AI provider";
+      setReadNote(
+        r.fields.confidence === "low"
+          ? `Filled from your file by ${who}. The file was hard to read, so check carefully.`
+          : `Filled from your file by ${who}. Check the highlighted fields.`,
+      );
+    } catch (e) {
+      setReading("error");
+      setReadNote(e instanceof ApiError ? e.message : "Could not read this file");
+    }
+  }
+
+  async function addFiles(picked: File[]) {
+    // Prepare once so the exact same bytes are read and later uploaded (reading is cached per file).
+    const prepared = await Promise.all(picked.map((f) => prepareForUpload(f)));
+    setFiles((p) => [...p, ...prepared]);
+    const first = prepared.find(isReadable);
+    if (isNew && first && reader?.configured && reader.autoRead && reading !== "busy" && reading !== "done") void readFirst(first);
+  }
+
+  function undoRead() {
+    if (beforeRead) setS(beforeRead);
+    setSuggested(new Set());
+    setBeforeRead(null);
+    setReadNote(null);
+    setReading("idle");
+  }
   const isNew = !capture;
 
   const counterparties = useSuggestions("counterparty");
@@ -279,7 +361,16 @@ export function CaptureForm({
   const orgs = useSuggestions("organization");
   const methods = useSuggestions("method");
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setS((p) => ({ ...p, [k]: v }));
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => {
+    setS((p) => ({ ...p, [k]: v }));
+    setTouched((t) => (t.has(k) ? t : new Set(t).add(k)));
+    setSuggested((g) => {
+      if (!g.has(k)) return g;
+      const n = new Set(g);
+      n.delete(k);
+      return n;
+    });
+  };
   const text = (k: keyof FormState) => ({
     value: s[k] as string,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => set(k, e.target.value as never),
@@ -353,15 +444,45 @@ export function CaptureForm({
       {isNew && (
         <div className="card p-4">
           <span className="label">{s.type === "place" || s.type === "idea" ? "Photos / screenshots" : "Proof / attachments"}</span>
-          <FilePicker onFiles={(f) => setFiles((p) => [...p, ...f])} disabled={saving} />
+          <FilePicker onFiles={(f) => void addFiles(f)} disabled={saving} />
           <PendingFiles files={files} onRemove={(i) => setFiles((p) => p.filter((_, j) => j !== i))} />
+          {reading === "busy" && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-accent">
+              <Loader2 size={16} className="animate-spin" /> Reading your file…
+            </p>
+          )}
+          {readNote && reading !== "busy" && (
+            <div
+              className={`mt-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                reading === "error" ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent"
+              }`}
+            >
+              <ScanText size={16} />
+              <span className="min-w-0 flex-1">{readNote}</span>
+              {reading === "done" && beforeRead && (
+                <button type="button" className="inline-flex items-center gap-1 font-medium underline" onClick={undoRead}>
+                  <Undo2 size={14} /> Undo
+                </button>
+              )}
+            </div>
+          )}
+          {reader?.configured && !reader.autoRead && files.some(isReadable) && reading === "idle" && (
+            <button type="button" className="btn-secondary mt-3" onClick={() => void readFirst(files.find(isReadable)!)}>
+              <ScanText size={16} /> Fill in from file
+            </button>
+          )}
+          {reader && !reader.configured && reader.canManage && files.length > 0 && (
+            <p className="mt-3 text-xs text-muted">
+              Tip: add an AI API key in Profile → Document reading to fill this form in from the file automatically.
+            </p>
+          )}
         </div>
       )}
 
       <div className="card grid gap-4 p-4 sm:grid-cols-2">
         {s.type === "document" && (
           <>
-            <Field label="Kind of document">
+            <Field label="Kind of document" suggested={sug("docKind")}>
               <select className="input" {...text("docKind")}>
                 {Object.entries(DOC_KIND_LABELS).map(([v, l]) => (
                   <option key={v} value={v}>
@@ -370,7 +491,7 @@ export function CaptureForm({
                 ))}
               </select>
             </Field>
-            <Field label="Expires / renews on" hint="We'll remind you before this date">
+            <Field label="Expires / renews on" hint="We'll remind you before this date" suggested={sug("expiresAt")}>
               <input type="date" className="input" {...text("expiresAt")} />
             </Field>
             <Field label="Reference" hint="Last 4 digits only. Don't store full ID numbers.">
@@ -431,7 +552,7 @@ export function CaptureForm({
 
         {money && (
           <>
-            <Field label={s.type === "idea" ? "Price (optional)" : "Amount"}>
+            <Field label={s.type === "idea" ? "Price (optional)" : "Amount"} suggested={sug("amount") || sug("currency")}>
               <div className="flex gap-2">
                 <input className="input" inputMode="decimal" placeholder="0.00" {...text("amount")} />
                 <input
@@ -443,17 +564,17 @@ export function CaptureForm({
                 />
               </div>
             </Field>
-            <Field label={COUNTERPARTY_LABEL[s.type] ?? "Who"}>
+            <Field label={COUNTERPARTY_LABEL[s.type] ?? "Who"} suggested={sug("counterparty")}>
               <SuggestInput id="counterparty" values={counterparties} {...text("counterparty")} />
             </Field>
           </>
         )}
         {s.type !== "document" && (
-          <Field label={s.type === "place" || s.type === "idea" ? "Saved on" : "Date"}>
+          <Field label={s.type === "place" || s.type === "idea" ? "Saved on" : "Date"} suggested={sug("occurredAt")}>
             <input type="date" className="input" {...text("occurredAt")} />
           </Field>
         )}
-        <Field label="Title" hint={money ? "Optional. We'll name it from the details if blank." : undefined}>
+        <Field label="Title" hint={money ? "Optional. We'll name it from the details if blank." : undefined} suggested={sug("title")}>
           <input className="input" placeholder={defaultTitle(s)} {...text("title")} />
         </Field>
         {s.type === "link" && (
@@ -461,7 +582,7 @@ export function CaptureForm({
             <input className="input" type="url" inputMode="url" placeholder="https://" {...text("url")} />
           </Field>
         )}
-        <Field label="Category">
+        <Field label="Category" suggested={sug("category")}>
           <SuggestInput id="category" values={categories} placeholder="HOA, Utilities, Travel…" {...text("category")} />
         </Field>
         {purchase && (
@@ -495,13 +616,13 @@ export function CaptureForm({
           </Field>
         )}
         {s.type === "payment" && (
-          <Field label="Confirmation #">
+          <Field label="Confirmation #" suggested={sug("confirmationNumber")}>
             <input className="input" {...text("confirmationNumber")} />
           </Field>
         )}
         {s.type === "deposit" && (
           <>
-            <Field label="Check #">
+            <Field label="Check #" suggested={sug("checkNumber")}>
               <input className="input" {...text("checkNumber")} />
             </Field>
             <Field label="Deposited to">

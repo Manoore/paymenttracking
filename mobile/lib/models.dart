@@ -38,13 +38,15 @@ class Attachment {
         filename = j['filename'] as String,
         mimeType = j['mimeType'] as String,
         size = _int(j['size']) ?? 0,
-        url = j['url'] as String?;
+        url = j['url'] as String?,
+        extraction = (j['extraction'] as Map?)?['fields'] as Map<String, dynamic>?;
 
   final String id;
   final String filename;
   final String mimeType;
   final int size;
   final String? url;
+  final Map<String, dynamic>? extraction;
 
   bool get isImage => mimeType.startsWith('image/');
 }
